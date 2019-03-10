@@ -1,10 +1,161 @@
 // Copyright (c) 2019, ilammy
 // Licensed under MIT license (see LICENSE)
 
-//! Dynamically scoped variables.
+//! Dynamically-scoped variables.
 //!
 //! _Dynamic_ or _fluid_ variables are a handy way to define global configuration values.
 //! They come from the Lisp family of languages where they are relatively popular in this role.
+//!
+//! # Defining dynamic variables
+//!
+//! Dynamic variables are _global_ therefore they should be defined as `static`.
+//! [`fluid_let!`] macro is used to define dynamic variables:
+//!
+//! ```
+//! use std::fs::File;
+//! use fluid_let::fluid_let;
+//!
+//! fluid_let!(static LOG_FILE: File);
+//! ```
+//!
+//! The actual type of `LOG_FILE` variable will be `Option<&File>`: that is, possibly unspecified
+//! reference to a file. All dynamic variables have `None` as their default value, unless
+//! a particular value is set for them.
+//!
+//! [`fluid_let!`]: macro.fluid_let.html
+//!
+//! # Setting dynamic variables
+//!
+//! Dynamic variables are given values with [`set`]:
+//!
+//! [`set`]: struct.DynamicVariable.html#method.set
+//!
+//! ```no_run
+//! # use std::io;
+//! # use std::fs::File;
+//! # use fluid_let::fluid_let;
+//! #
+//! # fluid_let!(static LOG_FILE: File);
+//! #
+//! # fn main() -> io::Result<()> {
+//! #
+//! let log_file = File::create("/tmp/log.txt")?;
+//!
+//! LOG_FILE.set(&log_file, || {
+//!     //
+//!     // logs will be redirected to /tmp/log.txt in this block
+//!     //
+//! });
+//! #
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! The new value is in effect within the _dynamic extent_ of the assignment, that is within
+//! the closure passed to `set`. Once the closure returns, the previous value of the variable
+//! is restored. You can nest assignments arbitrarily:
+//!
+//! ```no_run
+//! # use std::io;
+//! # use std::fs::File;
+//! # use fluid_let::fluid_let;
+//! #
+//! # fluid_let!(static LOG_FILE: File);
+//! #
+//! # fn open_log(path: &str) -> std::fs::File { unimplemented!() }
+//! #
+//! LOG_FILE.set(open_log("/tmp/log.txt"), || {
+//!     //
+//!     // log to /tmp/log.txt here
+//!     //
+//!     LOG_FILE.set(open_log("/dev/null"), || {
+//!         //
+//!         // log to /dev/null for a bit
+//!         //
+//!     });
+//!     //
+//!     // log to /tmp/log.txt again
+//!     //
+//! });
+//! ```
+//!
+//! # Accessing dynamic variables
+//!
+//! The current value of dynamic variable can be retrieved with [`get`]:
+//!
+//! [`get`]: struct.DynamicVariable.html#method.get
+//!
+//! ```
+//! # use std::io::{self, Write};
+//! # use std::fs::File;
+//! # use fluid_let::fluid_let;
+//! #
+//! # fluid_let!(static LOG_FILE: File);
+//! #
+//! fn write_log(msg: &str) -> io::Result<()> {
+//!     LOG_FILE.get(|current| {
+//!         if let Some(mut log_file) = current {
+//!             log_file.write_all(msg.as_bytes())?;
+//!             log_file.write_all(b"\n")?;
+//!         }
+//!         Ok(())
+//!     })
+//! }
+//! ```
+//!
+//! Note the following:
+//!
+//!   - dynamic variable may be not set, so you have to handle both `Options`
+//!   - dynamic variable itself is global (it has `'static` lifetime)
+//!     but its values are local and have shorter lifetimes,
+//!     therefore they are accessible only within the closure
+//!   - `get` forwards the value returned by the closure (this is true for `set` as well)
+//!
+//! Dynamic value assignment has _dynamic_ scope, not _lexical_ one (duh...)
+//! Therefore in the following program function `foo` will log to different files,
+//! depending on whether it is called from `bar` or `zog`.
+//!
+//! ```
+//! # use std::io;
+//! # use std::fs::File;
+//! # use fluid_let::fluid_let;
+//! #
+//! # fluid_let!(static LOG_FILE: File);
+//! #
+//! # fn write_log(msg: &str) { unimplemented!() }
+//! # fn open_log(path: &str) -> std::fs::File { unimplemented!() }
+//! #
+//! fn foo() {
+//!     write_log("hello from foo()");
+//! }
+//!
+//! fn bar() {
+//!     LOG_FILE.set(open_log("/tmp/bar.log"), || {
+//!         foo();
+//!     });
+//! }
+//!
+//! fn zog() {
+//!     LOG_FILE.set(open_log("/tmp/zog.log"), || {
+//!         foo();
+//!     });
+//! }
+//! ```
+//!
+//! This behavior is the whole point of dynamic variables.
+//!
+//! # Thread safety
+//!
+//! Dynamic variables are global and _thread-local_. That is, each thread gets its own independent
+//! instance of a dynamic variable. Values set in one thread are visible only in this thread.
+//! Other threads will not see any changes in values of their dynamic variables and may have
+//! completely different configurations.
+//!
+//! Note, however, that this does not free you from the usual synchronization concerns when shared
+//! objects are involved. Dynamic variables hold _references_ to objects. Therefore is is entirely
+//! possible to bind _the same_ object to a dynamic variable and access it from multiple threads.
+//! In this case you will probably need some synchronization to use the shared object in a safe
+//! manner, just like you would do when using `Arc` or something.
 
 use std::borrow::Borrow;
 use std::cell::UnsafeCell;
