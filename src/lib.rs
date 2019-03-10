@@ -10,9 +10,32 @@ use std::borrow::Borrow;
 use std::cell::UnsafeCell;
 use std::thread::LocalKey;
 
-/// Defines a global dynamic variable.
+/// Defines global dynamic variables.
 ///
-/// See [crate-level documentation](index.html) for examples.
+/// # Examples
+///
+/// One-line form for single definitions:
+///
+/// ```
+/// # use fluid_let::fluid_let;
+/// fluid_let!(static ENABLED: bool);
+/// ```
+///
+/// Multiple definitions with attributes and visibility modifiers are also supported:
+///
+/// ```
+/// # use fluid_let::fluid_let;
+/// fluid_let! {
+///     /// Length of `Debug` representation of hashes in characters.
+///     pub static HASH_LENGTH: usize;
+///
+///     /// If set to true then passwords will be printed to logs.
+///     #[cfg(test)]
+///     static DUMP_PASSWORDS: bool;
+/// }
+/// ```
+///
+/// See also [crate-level documentation](index.html) for usage examples.
 #[macro_export]
 macro_rules! fluid_let {
     // Simple case: a single definition.
