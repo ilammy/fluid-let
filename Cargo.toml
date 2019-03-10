@@ -1,0 +1,6 @@
+[package]
+name = "fluid-let"
+version = "0.1.0"
+authors = ["ilammy <me@ilammy.net>"]
+edition = "2018"
+
