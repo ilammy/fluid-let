@@ -1,6 +1,10 @@
 [package]
 name = "fluid-let"
 version = "0.1.0"
-authors = ["ilammy <me@ilammy.net>"]
+authors = ["ilammy"]
 edition = "2018"
-
+repository = "https://github.com/ilammy/fluid-let"
+readme = "README.md"
+keywords = ["dynamic scope", "dynamic variables", "fluid variables"]
+categories = ["config"]
+license = "MIT"
