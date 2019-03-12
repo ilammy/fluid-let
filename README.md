@@ -1,6 +1,9 @@
 fluid-let
 =========
 
+[![TravisCI: Build Status](https://travis-ci.org/ilammy/fluid-let.svg?branch=master)](https://travis-ci.org/ilammy/fluid-let)
+[![AppVeyor: Build status](https://ci.appveyor.com/api/projects/status/77u53qlos7rfjj5p?svg=true)](https://ci.appveyor.com/project/ilammy/fluid-let)
+
 **fluid-let** implements _dynamically-scoped_ variables.
 
 Dynamic or _fluid_ variables are

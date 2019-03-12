@@ -8,3 +8,7 @@ readme = "README.md"
 keywords = ["dynamic scope", "dynamic variables", "fluid variables"]
 categories = ["config"]
 license = "MIT"
+
+[badges]
+travis-ci = { repository = "ilammy/fluid-let" }
+appveyor = { repository = "ilammy/fluid-let" }
