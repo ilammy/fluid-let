@@ -1,8 +1,7 @@
 fluid-let
 =========
 
-[![TravisCI: Build Status](https://travis-ci.org/ilammy/fluid-let.svg?branch=master)](https://travis-ci.org/ilammy/fluid-let)
-[![AppVeyor: Build status](https://ci.appveyor.com/api/projects/status/77u53qlos7rfjj5p?svg=true)](https://ci.appveyor.com/project/ilammy/fluid-let)
+<a href="https://github.com/ilammy/fluid-let"><img alt="GitHub Actions status" src="https://github.com/ilammy/fluid-let/workflows/main/badge.svg"></a>
 
 **fluid-let** implements _dynamically-scoped_ variables.
 
@@ -77,13 +76,13 @@ Now your users can configure the truncation dynamically:
 ```rust
 DEBUG_FULL_HASH.set(true, || {
     //
-    // Code that requires full precision of hashes 
+    // Code that requires full precision of hashes
     //
 });
 ```
 
 If they do not configure anything
-then default settings will be used. 
+then default settings will be used.
 
 ## License
 
