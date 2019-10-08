@@ -1,0 +1,47 @@
+name: Benchmarks
+
+on:
+  pull_request:
+    branches:
+    - master
+
+env:
+  # Treat warnings as errors
+  RUSTFLAGS: -D warnings
+
+jobs:
+  benchmark:
+    # Benchmarks can be really flaky in CI environment, so we're using them mostly
+    # to ensure that 1) they are compilable, and 2) there no drastic unexpected
+    # degradation in performance. They also take quite a long time to run, so it's
+    # okay to run them in only one environment.
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+
+    - name: Check out old code
+      uses: actions/checkout@v1
+      with:
+        ref: ${{ github.base_ref }}
+    - name: Compile benchmarks
+      run: cargo bench --no-run
+    - name: Run benchmarks for old code
+      run: cargo bench
+
+    - name: Check out new code
+      uses: actions/checkout@v1
+      with:
+        ref: ${{ github.head_ref }}
+    - name: Compile benchmarks
+      run: cargo bench --no-run
+    - name: Run benchmarks for new code
+      run: cargo bench
+
+    - name: Upload benchmark comparison
+      uses: actions/upload-artifact@v1
+      with:
+        name: bench
+        path: target/criterion/report
