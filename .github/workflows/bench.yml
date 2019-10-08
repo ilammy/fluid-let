@@ -44,4 +44,4 @@ jobs:
       uses: actions/upload-artifact@v1
       with:
         name: bench
-        path: target/criterion/report
+        path: target/criterion
