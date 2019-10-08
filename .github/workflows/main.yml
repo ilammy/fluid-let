@@ -33,8 +33,12 @@ jobs:
     - name: Check code formatting
       run: cargo fmt -- --check
     - name: Run static analysis
-      run: cargo clippy --all-targets
+      run: cargo clippy
     - name: Run normal build
       run: cargo build
+    - name: Compile testing dependencies
+      run: cargo test --no-run
+    - name: Run static analysis on tests
+      run: cargo clippy --all-targets
     - name: Run unit-test suite
       run: cargo test
