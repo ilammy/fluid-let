@@ -44,5 +44,5 @@ jobs:
     - name: Upload benchmark comparison
       uses: actions/upload-artifact@v1
       with:
-        name: bench
+        name: Benchmark report
         path: target/criterion
