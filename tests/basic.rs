@@ -5,13 +5,13 @@ use std::thread;
 
 use fluid_let::fluid_let;
 
-fluid_let!(static YEAR: i32);
-
 #[test]
 fn dynamic_scoping() {
+    fluid_let!(static YEAR: i32);
+
     YEAR.get(|current| assert_eq!(current, None));
 
-    YEAR.set(2019, || {
+    YEAR.set(&2019, || {
         YEAR.get(|current| assert_eq!(current, Some(&2019)));
 
         YEAR.set(&2525, || {
@@ -21,32 +21,14 @@ fn dynamic_scoping() {
 }
 
 #[test]
-fn references() {
-    fn get_year() -> i32 {
-        YEAR.get(|value| *value.unwrap())
-    }
-
-    // Temporary value
-    YEAR.set(10, || assert_eq!(get_year(), 10));
-
-    // Local reference
-    let current_year = 20;
-    YEAR.set(&current_year, || assert_eq!(get_year(), 20));
-
-    // Heap reference
-    let current_year = Box::new(30);
-    YEAR.set(current_year, || assert_eq!(get_year(), 30));
-}
-
-fluid_let!(static THREAD_ID: i8);
-
-#[test]
 fn thread_locality() {
-    THREAD_ID.set(0, || {
+    fluid_let!(static THREAD_ID: i8);
+
+    THREAD_ID.set(&0, || {
         THREAD_ID.get(|current| assert_eq!(current, Some(&0)));
         let t = thread::spawn(move || {
             THREAD_ID.get(|current| assert_eq!(current, None));
-            THREAD_ID.set(1, || {
+            THREAD_ID.set(&1, || {
                 THREAD_ID.get(|current| assert_eq!(current, Some(&1)));
             });
         });
