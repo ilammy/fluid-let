@@ -5,6 +5,7 @@ use criterion::*;
 
 use fluid_let::fluid_let;
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
 #[inline]
 fn read_and_add(sum: &mut i32, value: &i32) {
     // Make sure the compiler does not optimize this and emits actual loads & stores.
