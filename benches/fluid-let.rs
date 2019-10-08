@@ -31,7 +31,7 @@ fn set(c: &mut Criterion) {
     group.bench_function(BenchmarkId::new("set", "dynamic"), |b| {
         fluid_let!(static COUNTER: i32);
         let mut total = 0;
-        b.iter(|| COUNTER.set(total, || black_box(total += total)));
+        b.iter(|| COUNTER.set(total, || total += total));
     });
     group.bench_function(BenchmarkId::new("set", "static"), |b| {
         static mut COUNTER: Option<&i32> = None;
@@ -39,7 +39,8 @@ fn set(c: &mut Criterion) {
         b.iter(|| unsafe {
             // It's safe to transmute reference lifetime like this:
             COUNTER = Some(std::mem::transmute(&total));
-            black_box(total += total);
+            total += total;
+            black_box(());
             COUNTER = None;
         });
     });
