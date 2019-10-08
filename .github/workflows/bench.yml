@@ -34,6 +34,7 @@ jobs:
     - name: Check out new code
       uses: actions/checkout@v1
       with:
+        clean: false
         ref: ${{ github.head_ref }}
     - name: Compile benchmarks
       run: cargo bench --no-run
