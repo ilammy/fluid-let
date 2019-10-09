@@ -8,6 +8,10 @@ Breaking changes:
 - `set()` now accepts only `&T` instead of `Borrow<T>`, avoiding implicit
   temporary copies of types implementing `Copy`.
 
+New features:
+
+- Convenience getters `copied()` and `cloned()` for copyable types.
+
 Version 0.1.0 — 2019-03-12
 ==========================
 

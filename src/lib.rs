@@ -113,6 +113,48 @@
 //! its values usually have shorter lifetimes, as short as the corresponing
 //! `set()` call. Therefore, access reference must have _even shorter_ lifetime.
 //!
+//! If the variable type implements `Clone` or `Copy` then you can use [`cloned`]
+//! and [`copied`] convenience accessors to get a copy of the current value:
+//!
+//! [`cloned`]: struct.DynamicVariable.html#method.cloned
+//! [`copied`]: struct.DynamicVariable.html#method.copied
+//!
+//! ```no_run
+//! # use std::io::{self, Write};
+//! # use std::fs::File;
+//! #
+//! # use fluid_let::fluid_let;
+//! #
+//! # fluid_let!(static LOG_FILE: File);
+//! #
+//! #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+//! enum LogLevel {
+//!     Debug,
+//!     Info,
+//!     Error,
+//! }
+//!
+//! fluid_let!(static MIN_LOG_LEVEL: LogLevel);
+//!
+//! const DEFAULT_MIN_LOG_LEVEL: LogLevel = LogLevel::Info;
+//!
+//! fn min_log_level() -> LogLevel {
+//!     MIN_LOG_LEVEL.copied().unwrap_or(DEFAULT_MIN_LOG_LEVEL)
+//! }
+//!
+//! fn write_log(level: LogLevel, msg: &str) -> io::Result<()> {
+//!     if level < min_log_level() {
+//!         return Ok(());
+//!     }
+//!     LOG_FILE.get(|current| {
+//!         if let Some(mut log_file) = current {
+//!             write!(log_file, "{}\n", msg)?;
+//!         }
+//!         Ok(())
+//!     })
+//! }
+//! ```
+//!
 //! # Thread safety
 //!
 //! Dynamic variables are global and _thread-local_. That is, each thread gets its own independent
@@ -121,7 +163,7 @@
 //! completely different configurations.
 //!
 //! Note, however, that this does not free you from the usual synchronization concerns when shared
-//! objects are involved. Dynamic variables hold _references_ to objects. Therefore is is entirely
+//! objects are involved. Dynamic variables hold _references_ to objects. Therefore it is entirely
 //! possible to bind _the same_ object to a dynamic variable and access it from multiple threads.
 //! In this case you will probably need some synchronization to use the shared object in a safe
 //! manner, just like you would do when using `Arc` or something.
@@ -224,6 +266,20 @@ impl<T> DynamicVariable<T> {
             let _guard = unsafe { current.set(value) };
             f()
         })
+    }
+}
+
+impl<T: Clone> DynamicVariable<T> {
+    /// Clone current value of the dynamic variable.
+    pub fn cloned(&self) -> Option<T> {
+        self.get(|value| value.cloned())
+    }
+}
+
+impl<T: Copy> DynamicVariable<T> {
+    /// Copy current value of the dynamic variable.
+    pub fn copied(&self) -> Option<T> {
+        self.get(|value| value.copied())
     }
 }
 

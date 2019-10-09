@@ -45,3 +45,14 @@ fluid_let! {
     /// Variable 3
     pub static VAR_3: u8;
 }
+
+#[test]
+fn convenience_accessors() {
+    fluid_let!(static ENABLED: bool);
+
+    assert_eq!(ENABLED.cloned(), None);
+    assert_eq!(ENABLED.copied(), None);
+
+    ENABLED.set(&true, || assert_eq!(ENABLED.cloned(), Some(true)));
+    ENABLED.set(&true, || assert_eq!(ENABLED.copied(), Some(true)));
+}
