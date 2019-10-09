@@ -8,6 +8,11 @@ Breaking changes:
 - `set()` now accepts only `&T` instead of `Borrow<T>`, avoiding implicit
   temporary copies of types implementing `Copy`.
 
+New features:
+
+- Convenience getters `copied()` and `cloned()` for copyable types.
+- Convenience setter `fluid_set!` for scoped assignment.
+
 Version 0.1.0 — 2019-03-12
 ==========================
 

@@ -3,7 +3,7 @@
 
 use std::thread;
 
-use fluid_let::fluid_let;
+use fluid_let::{fluid_let, fluid_set};
 
 #[test]
 fn dynamic_scoping() {
@@ -11,13 +11,15 @@ fn dynamic_scoping() {
 
     YEAR.get(|current| assert_eq!(current, None));
 
-    YEAR.set(&2019, || {
-        YEAR.get(|current| assert_eq!(current, Some(&2019)));
+    fluid_set!(YEAR, &2019);
 
-        YEAR.set(&2525, || {
-            YEAR.get(|current| assert_eq!(current, Some(&2525)));
-        })
-    });
+    YEAR.get(|current| assert_eq!(current, Some(&2019)));
+    {
+        fluid_set!(YEAR, &2525);
+
+        YEAR.get(|current| assert_eq!(current, Some(&2525)));
+    }
+    YEAR.get(|current| assert_eq!(current, Some(&2019)));
 }
 
 #[test]
@@ -44,4 +46,15 @@ fluid_let! {
     static VAR_2: ();
     /// Variable 3
     pub static VAR_3: u8;
+}
+
+#[test]
+fn convenience_accessors() {
+    fluid_let!(static ENABLED: bool);
+
+    assert_eq!(ENABLED.cloned(), None);
+    assert_eq!(ENABLED.copied(), None);
+
+    ENABLED.set(&true, || assert_eq!(ENABLED.cloned(), Some(true)));
+    ENABLED.set(&true, || assert_eq!(ENABLED.copied(), Some(true)));
 }

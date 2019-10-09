@@ -53,9 +53,14 @@
 //! You can’t directly modify the dynamic variable value after setting it,
 //! but you can use something like `Cell` or `RefCell` to circumvent that.
 //!
-//! The new value is in effect within the _dynamic extent_ of the assignment, that is within
-//! the closure passed to `set`. Once the closure returns, the previous value of the variable
-//! is restored. You can nest assignments arbitrarily:
+//! The new value is in effect within the _dynamic extent_ of the assignment,
+//! that is within the closure passed to `set`. Once the closure returns, the
+//! previous value of the variable is restored.
+//!
+//! If you do not need precise control over the extent of the assignment, you
+//! can use the [`fluid_set!`] macro to assign until the end of the scope:
+//!
+//! [`fluid_set!`]: macro.fluid_set.html
 //!
 //! ```no_run
 //! # use std::fs::File;
@@ -66,18 +71,40 @@
 //! #
 //! # fn open(path: &str) -> File { unimplemented!() }
 //! #
-//! LOG_FILE.set(&open("/tmp/log.txt"), || {
+//! use fluid_let::fluid_set;
+//!
+//! fn chatterbox_function() {
+//!     fluid_set!(LOG_FILE, &open("/dev/null"));
 //!     //
-//!     // log to /tmp/log.txt here
+//!     // logs will be written to /dev/null in this function
 //!     //
+//! }
+//! ```
+//!
+//! Obviously, you can also nest assignments arbitrarily:
+//!
+//! ```no_run
+//! # use std::fs::File;
+//! #
+//! # use fluid_let::{fluid_let, fluid_set};
+//! #
+//! # fluid_let!(static LOG_FILE: File);
+//! #
+//! # fn open(path: &str) -> File { unimplemented!() }
+//! #
+//! LOG_FILE.set(&open("A.txt"), || {
+//!     // log to A.txt here
 //!     LOG_FILE.set(&open("/dev/null"), || {
-//!         //
 //!         // log to /dev/null for a bit
-//!         //
+//!         fluid_set!(LOG_FILE, &open("B.txt"));
+//!         // log to B.txt starting with this line
+//!         {
+//!             fluid_set!(LOG_FILE, &open("C.txt"));
+//!             // but in this block log to C.txt
+//!         }
+//!         // before going back to using B.txt here
 //!     });
-//!     //
-//!     // log to /tmp/log.txt again
-//!     //
+//!     // and logging to A.txt again
 //! });
 //! ```
 //!
@@ -113,6 +140,48 @@
 //! its values usually have shorter lifetimes, as short as the corresponing
 //! `set()` call. Therefore, access reference must have _even shorter_ lifetime.
 //!
+//! If the variable type implements `Clone` or `Copy` then you can use [`cloned`]
+//! and [`copied`] convenience accessors to get a copy of the current value:
+//!
+//! [`cloned`]: struct.DynamicVariable.html#method.cloned
+//! [`copied`]: struct.DynamicVariable.html#method.copied
+//!
+//! ```no_run
+//! # use std::io::{self, Write};
+//! # use std::fs::File;
+//! #
+//! # use fluid_let::fluid_let;
+//! #
+//! # fluid_let!(static LOG_FILE: File);
+//! #
+//! #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+//! enum LogLevel {
+//!     Debug,
+//!     Info,
+//!     Error,
+//! }
+//!
+//! fluid_let!(static MIN_LOG_LEVEL: LogLevel);
+//!
+//! const DEFAULT_MIN_LOG_LEVEL: LogLevel = LogLevel::Info;
+//!
+//! fn min_log_level() -> LogLevel {
+//!     MIN_LOG_LEVEL.copied().unwrap_or(DEFAULT_MIN_LOG_LEVEL)
+//! }
+//!
+//! fn write_log(level: LogLevel, msg: &str) -> io::Result<()> {
+//!     if level < min_log_level() {
+//!         return Ok(());
+//!     }
+//!     LOG_FILE.get(|current| {
+//!         if let Some(mut log_file) = current {
+//!             write!(log_file, "{}\n", msg)?;
+//!         }
+//!         Ok(())
+//!     })
+//! }
+//! ```
+//!
 //! # Thread safety
 //!
 //! Dynamic variables are global and _thread-local_. That is, each thread gets its own independent
@@ -121,7 +190,7 @@
 //! completely different configurations.
 //!
 //! Note, however, that this does not free you from the usual synchronization concerns when shared
-//! objects are involved. Dynamic variables hold _references_ to objects. Therefore is is entirely
+//! objects are involved. Dynamic variables hold _references_ to objects. Therefore it is entirely
 //! possible to bind _the same_ object to a dynamic variable and access it from multiple threads.
 //! In this case you will probably need some synchronization to use the shared object in a safe
 //! manner, just like you would do when using `Arc` or something.
@@ -185,6 +254,49 @@ macro_rules! fluid_let {
     {} => {};
 }
 
+/// Binds a value to a dynamic variable.
+///
+/// # Examples
+///
+/// If you do not need to explicitly delimit the scope of dynamic assignment then you can
+/// use `fluid_set!` to assign a value until the end of the current scope:
+///
+/// ```no_run
+/// use fluid_let::{fluid_let, fluid_set};
+///
+/// fluid_let!(static ENABLED: bool);
+///
+/// fn some_function() {
+///     fluid_set!(ENABLED, &true);
+///
+///     // function body
+/// }
+/// ```
+///
+/// This is effectively equivalent to writing
+///
+/// ```no_run
+/// # use fluid_let::{fluid_let, fluid_set};
+/// #
+/// # fluid_let!(static ENABLED: bool);
+/// #
+/// fn some_function() {
+///     ENABLED.set(&true, || {
+///         // function body
+///     });
+/// }
+/// ```
+///
+/// See also [crate-level documentation](index.html) for usage examples.
+#[macro_export]
+macro_rules! fluid_set {
+    ($variable:expr, $value:expr) => {
+        // This is safe because the users do not get direct access to the guard
+        // and are not able to drop it prematurely, thus maintaining invariants.
+        let guard = unsafe { $variable.set_guard($value) };
+    };
+}
+
 /// A global dynamic variable.
 ///
 /// Declared and initialized by the [`fluid_let!`](macro.fluid_let.html) macro.
@@ -224,6 +336,36 @@ impl<T> DynamicVariable<T> {
             let _guard = unsafe { current.set(value) };
             f()
         })
+    }
+
+    /// Bind a new value to the dynamic variable.
+    ///
+    /// # Safety
+    ///
+    /// The value is bound for the lifetime of the returned guard. The guard must be
+    /// dropped before the end of lifetime of the new and old assignment values.
+    /// If the variable is assigned another value while this guard is alive, it must
+    /// not be dropped until that new assignment is undone.
+    #[doc(hidden)]
+    pub unsafe fn set_guard(&self, value: &T) -> DynamicCellGuard<T> {
+        use std::mem::transmute;
+        // We use transmute to extend the lifetime or "current" to that of "value".
+        // This is really the case when assignments are properly scoped.
+        self.cell.with(|current| transmute(current.set(value)))
+    }
+}
+
+impl<T: Clone> DynamicVariable<T> {
+    /// Clone current value of the dynamic variable.
+    pub fn cloned(&self) -> Option<T> {
+        self.get(|value| value.cloned())
+    }
+}
+
+impl<T: Copy> DynamicVariable<T> {
+    /// Copy current value of the dynamic variable.
+    pub fn copied(&self) -> Option<T> {
+        self.get(|value| value.copied())
     }
 }
 
