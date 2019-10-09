@@ -418,6 +418,8 @@ impl<'a, T> Drop for DynamicCellGuard<'a, T> {
 mod tests {
     use super::*;
 
+    use std::thread;
+
     #[test]
     fn cell_set_get_guards() {
         // This is how properly scoped usage of DynamicCell works.
@@ -456,5 +458,49 @@ mod tests {
             assert_eq!(v.get(), Some(&5));
             // And now there's no one to reset the variable to None state.
         }
+    }
+
+    #[test]
+    fn dynamic_scoping() {
+        fluid_let!(static YEAR: i32);
+
+        YEAR.get(|current| assert_eq!(current, None));
+
+        fluid_set!(YEAR, &2019);
+
+        YEAR.get(|current| assert_eq!(current, Some(&2019)));
+        {
+            fluid_set!(YEAR, &2525);
+
+            YEAR.get(|current| assert_eq!(current, Some(&2525)));
+        }
+        YEAR.get(|current| assert_eq!(current, Some(&2019)));
+    }
+
+    #[test]
+    fn thread_locality() {
+        fluid_let!(static THREAD_ID: i8);
+
+        THREAD_ID.set(&0, || {
+            THREAD_ID.get(|current| assert_eq!(current, Some(&0)));
+            let t = thread::spawn(move || {
+                THREAD_ID.get(|current| assert_eq!(current, None));
+                THREAD_ID.set(&1, || {
+                    THREAD_ID.get(|current| assert_eq!(current, Some(&1)));
+                });
+            });
+            drop(t.join());
+        })
+    }
+
+    #[test]
+    fn convenience_accessors() {
+        fluid_let!(static ENABLED: bool);
+
+        assert_eq!(ENABLED.cloned(), None);
+        assert_eq!(ENABLED.copied(), None);
+
+        ENABLED.set(&true, || assert_eq!(ENABLED.cloned(), Some(true)));
+        ENABLED.set(&true, || assert_eq!(ENABLED.copied(), Some(true)));
     }
 }
