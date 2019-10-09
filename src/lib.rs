@@ -418,6 +418,7 @@ impl<'a, T> Drop for DynamicCellGuard<'a, T> {
 mod tests {
     use super::*;
 
+    use std::fmt;
     use std::thread;
 
     #[test]
@@ -502,5 +503,41 @@ mod tests {
 
         ENABLED.set(&true, || assert_eq!(ENABLED.cloned(), Some(true)));
         ENABLED.set(&true, || assert_eq!(ENABLED.copied(), Some(true)));
+    }
+
+    struct Hash {
+        value: [u8; 16],
+    }
+
+    fluid_let!(pub static DEBUG_FULL_HASH: bool);
+
+    impl fmt::Debug for Hash {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            let full = DEBUG_FULL_HASH.copied().unwrap_or(false);
+
+            write!(f, "Hash(")?;
+            if full {
+                for byte in &self.value {
+                    write!(f, "{:02X}", byte)?;
+                }
+            } else {
+                for byte in &self.value[..4] {
+                    write!(f, "{:02X}", byte)?;
+                }
+                write!(f, "...")?;
+            }
+            write!(f, ")")
+        }
+    }
+
+    #[test]
+    fn readme_example_code() {
+        let hash = Hash { value: [0; 16] };
+        assert_eq!(format!("{:?}", hash), "Hash(00000000...)");
+        fluid_set!(DEBUG_FULL_HASH, &true);
+        assert_eq!(
+            format!("{:?}", hash),
+            "Hash(00000000000000000000000000000000)"
+        );
     }
 }

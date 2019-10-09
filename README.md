@@ -53,20 +53,20 @@ Then use it in your `Debug` implementation:
 ```rust
 impl fmt::Debug for Hash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let full = DEBUG_FULL_HASH.get(|current| current.unwrap_or(false));
+        let full = DEBUG_FULL_HASH.copied().unwrap_or(false);
 
-        write!("Hash(")?;
+        write!(f, "Hash(")?;
         if full {
-            for byte in self.value[..] {
-                write!("{:02X}", byte);
+            for byte in &self.value {
+                write!(f, "{:02X}", byte)?;
             }
         } else {
-            for byte in self.value[..8] {
-                write!("{:02X}", byte);
+            for byte in &self.value[..4] {
+                write!(f, "{:02X}", byte)?;
             }
-            write!("...")?;
+            write!(f, "...")?;
         }
-        write!(")")
+        write!(f, ")")
     }
 }
 ```
@@ -74,11 +74,12 @@ impl fmt::Debug for Hash {
 Now your users can configure the truncation dynamically:
 
 ```rust
-DEBUG_FULL_HASH.set(true, || {
-    //
-    // Code that requires full precision of hashes
-    //
-});
+fn some_important_function() {
+    fluid_set!(DEBUG_FULL_HASH, &true);
+
+    // Hashes will be printed out with full precision in this function
+    // as well as in all functions that it calls.
+}
 ```
 
 If they do not configure anything
