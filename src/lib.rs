@@ -293,7 +293,7 @@ macro_rules! fluid_set {
     ($variable:expr, $value:expr) => {
         // This is safe because the users do not get direct access to the guard
         // and are not able to drop it prematurely, thus maintaining invariants.
-        let guard = unsafe { $variable.set_guard($value) };
+        let _guard_ = unsafe { $variable.set_guard($value) };
     };
 }
 
