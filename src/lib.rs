@@ -6,69 +6,71 @@
 //! _Dynamic_ or _fluid_ variables are a handy way to define global configuration values.
 //! They come from the Lisp family of languages where they are relatively popular in this role.
 //!
-//! # Defining dynamic variables
+//! # Declaring dynamic variables
 //!
-//! Dynamic variables are _global_ therefore they should be defined as `static`.
-//! [`fluid_let!`] macro is used to define dynamic variables:
+//! [`fluid_let!`] macro is used to declare dynamic variables. Dynamic variables
+//! are _global_, therefore they must be declared as `static`:
 //!
 //! ```
 //! use std::fs::File;
+//!
 //! use fluid_let::fluid_let;
 //!
 //! fluid_let!(static LOG_FILE: File);
 //! ```
 //!
-//! The actual type of `LOG_FILE` variable will be `Option<&File>`: that is, possibly unspecified
-//! reference to a file. All dynamic variables have `None` as their default value, unless
-//! a particular value is set for them.
+//! The actual type of `LOG_FILE` variable will be `Option<&File>`: that is,
+//! possibly absent reference to a file. All dynamic variables have `None` as
+//! their default value, unless a particular value is set for them.
 //!
 //! [`fluid_let!`]: macro.fluid_let.html
 //!
 //! # Setting dynamic variables
 //!
-//! Dynamic variables are given values with [`set`]:
+//! [`set`] is used to give value to a dynamic variable:
 //!
 //! [`set`]: struct.DynamicVariable.html#method.set
 //!
 //! ```no_run
-//! # use std::io;
 //! # use std::fs::File;
+//! #
 //! # use fluid_let::fluid_let;
 //! #
 //! # fluid_let!(static LOG_FILE: File);
 //! #
-//! # fn main() -> io::Result<()> {
+//! # fn open(path: &str) -> File { unimplemented!() }
 //! #
-//! let log_file = File::create("/tmp/log.txt")?;
+//! let log_file: File = open("/tmp/log.txt");
 //!
 //! LOG_FILE.set(&log_file, || {
 //!     //
 //!     // logs will be redirected to /tmp/log.txt in this block
 //!     //
 //! });
-//! #
-//! # Ok(())
-//! # }
 //! ```
+//!
+//! Note that you store an _immutable reference_ in the dynamic variable.
+//! You can’t directly modify the dynamic variable value after setting it,
+//! but you can use something like `Cell` or `RefCell` to circumvent that.
 //!
 //! The new value is in effect within the _dynamic extent_ of the assignment, that is within
 //! the closure passed to `set`. Once the closure returns, the previous value of the variable
 //! is restored. You can nest assignments arbitrarily:
 //!
 //! ```no_run
-//! # use std::io;
 //! # use std::fs::File;
+//! #
 //! # use fluid_let::fluid_let;
 //! #
 //! # fluid_let!(static LOG_FILE: File);
 //! #
-//! # fn open_log(path: &str) -> std::fs::File { unimplemented!() }
+//! # fn open(path: &str) -> File { unimplemented!() }
 //! #
-//! LOG_FILE.set(open_log("/tmp/log.txt"), || {
+//! LOG_FILE.set(&open("/tmp/log.txt"), || {
 //!     //
 //!     // log to /tmp/log.txt here
 //!     //
-//!     LOG_FILE.set(open_log("/dev/null"), || {
+//!     LOG_FILE.set(&open("/dev/null"), || {
 //!         //
 //!         // log to /dev/null for a bit
 //!         //
@@ -81,13 +83,14 @@
 //!
 //! # Accessing dynamic variables
 //!
-//! The current value of dynamic variable can be retrieved with [`get`]:
+//! [`get`] is used to retrieve the current value of a dynamic variable:
 //!
 //! [`get`]: struct.DynamicVariable.html#method.get
 //!
-//! ```
+//! ```no_run
 //! # use std::io::{self, Write};
 //! # use std::fs::File;
+//! #
 //! # use fluid_let::fluid_let;
 //! #
 //! # fluid_let!(static LOG_FILE: File);
@@ -95,54 +98,20 @@
 //! fn write_log(msg: &str) -> io::Result<()> {
 //!     LOG_FILE.get(|current| {
 //!         if let Some(mut log_file) = current {
-//!             log_file.write_all(msg.as_bytes())?;
-//!             log_file.write_all(b"\n")?;
+//!             write!(log_file, "{}\n", msg)?;
 //!         }
 //!         Ok(())
 //!     })
 //! }
 //! ```
 //!
-//! Note the following:
+//! Current value of the dynamic variable is passed to the provided closure, and
+//! the value returned by the closure becomes the value of the `get()` call.
 //!
-//!   - dynamic variable may be not set, so you have to handle both `Options`
-//!   - dynamic variable itself is global (it has `'static` lifetime)
-//!     but its values are local and have shorter lifetimes,
-//!     therefore they are accessible only within the closure
-//!   - `get` forwards the value returned by the closure (this is true for `set` as well)
-//!
-//! Dynamic value assignment has _dynamic_ scope, not _lexical_ one (duh...)
-//! Therefore in the following program function `foo` will log to different files,
-//! depending on whether it is called from `bar` or `zog`.
-//!
-//! ```
-//! # use std::io;
-//! # use std::fs::File;
-//! # use fluid_let::fluid_let;
-//! #
-//! # fluid_let!(static LOG_FILE: File);
-//! #
-//! # fn write_log(msg: &str) { unimplemented!() }
-//! # fn open_log(path: &str) -> std::fs::File { unimplemented!() }
-//! #
-//! fn foo() {
-//!     write_log("hello from foo()");
-//! }
-//!
-//! fn bar() {
-//!     LOG_FILE.set(open_log("/tmp/bar.log"), || {
-//!         foo();
-//!     });
-//! }
-//!
-//! fn zog() {
-//!     LOG_FILE.set(open_log("/tmp/zog.log"), || {
-//!         foo();
-//!     });
-//! }
-//! ```
-//!
-//! This behavior is the whole point of dynamic variables.
+//! This somewhat weird access interface is dictated by safety requirements. The
+//! dynamic variable itself is global and thus has `'static` lifetime. However,
+//! its values usually have shorter lifetimes, as short as the corresponing
+//! `set()` call. Therefore, access reference must have _even shorter_ lifetime.
 //!
 //! # Thread safety
 //!
@@ -157,22 +126,21 @@
 //! In this case you will probably need some synchronization to use the shared object in a safe
 //! manner, just like you would do when using `Arc` or something.
 
-use std::borrow::Borrow;
 use std::cell::UnsafeCell;
 use std::thread::LocalKey;
 
-/// Defines global dynamic variables.
+/// Declares global dynamic variables.
 ///
 /// # Examples
 ///
-/// One-line form for single definitions:
+/// One-line form for single declarations:
 ///
 /// ```
 /// # use fluid_let::fluid_let;
 /// fluid_let!(static ENABLED: bool);
 /// ```
 ///
-/// Multiple definitions with attributes and visibility modifiers are also supported:
+/// Multiple declarations with attributes and visibility modifiers are also supported:
 ///
 /// ```
 /// # use fluid_let::fluid_let;
@@ -219,7 +187,7 @@ macro_rules! fluid_let {
 
 /// A global dynamic variable.
 ///
-/// Defined and instantiated by the [`fluid_let!`](macro.fluid_let.html) macro.
+/// Declared and initialized by the [`fluid_let!`](macro.fluid_let.html) macro.
 ///
 /// See [crate-level documentation](index.html) for examples.
 pub struct DynamicVariable<T: 'static> {
@@ -241,7 +209,7 @@ pub struct DynamicCellGuard<'a, T> {
 }
 
 impl<T> DynamicVariable<T> {
-    /// Access current value of dynamic variable.
+    /// Access current value of the dynamic variable.
     pub fn get<R>(&self, f: impl FnOnce(Option<&T>) -> R) -> R {
         self.cell.with(|current| {
             // This is safe usage when paired with set().
@@ -249,11 +217,11 @@ impl<T> DynamicVariable<T> {
         })
     }
 
-    /// Modify current value of a dynamic variable.
-    pub fn set<R>(&self, value: impl Borrow<T>, f: impl FnOnce() -> R) -> R {
+    /// Bind a new value to the dynamic variable.
+    pub fn set<R>(&self, value: &T, f: impl FnOnce() -> R) -> R {
         self.cell.with(|current| {
             // This is safe usage when paired with get().
-            let _guard = unsafe { current.set(value.borrow()) };
+            let _guard = unsafe { current.set(value) };
             f()
         })
     }

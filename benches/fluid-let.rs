@@ -22,7 +22,7 @@ fn get(c: &mut Criterion) {
     group.bench_function(BenchmarkId::new("get", "dynamic"), |b| {
         fluid_let!(static COUNTER: i32);
         let mut total = 0;
-        COUNTER.set(1, || {
+        COUNTER.set(&1, || {
             b.iter(|| COUNTER.get(|value| read_and_add(&mut total, value.unwrap_or(&0))));
         });
     });
