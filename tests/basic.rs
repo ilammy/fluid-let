@@ -3,7 +3,7 @@
 
 use std::thread;
 
-use fluid_let::fluid_let;
+use fluid_let::{fluid_let, fluid_set};
 
 #[test]
 fn dynamic_scoping() {
@@ -11,13 +11,15 @@ fn dynamic_scoping() {
 
     YEAR.get(|current| assert_eq!(current, None));
 
-    YEAR.set(&2019, || {
-        YEAR.get(|current| assert_eq!(current, Some(&2019)));
+    fluid_set!(YEAR, &2019);
 
-        YEAR.set(&2525, || {
-            YEAR.get(|current| assert_eq!(current, Some(&2525)));
-        })
-    });
+    YEAR.get(|current| assert_eq!(current, Some(&2019)));
+    {
+        fluid_set!(YEAR, &2525);
+
+        YEAR.get(|current| assert_eq!(current, Some(&2525)));
+    }
+    YEAR.get(|current| assert_eq!(current, Some(&2019)));
 }
 
 #[test]
