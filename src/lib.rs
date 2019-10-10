@@ -184,16 +184,17 @@
 //!
 //! # Thread safety
 //!
-//! Dynamic variables are global and _thread-local_. That is, each thread gets its own independent
-//! instance of a dynamic variable. Values set in one thread are visible only in this thread.
-//! Other threads will not see any changes in values of their dynamic variables and may have
-//! completely different configurations.
+//! Dynamic variables are global and _thread-local_. That is, each thread gets
+//! its own independent instance of a dynamic variable. Values set in one thread
+//! are visible only in this thread. Other threads will not see any changes in
+//! values of their dynamic variables and may have different configurations.
 //!
-//! Note, however, that this does not free you from the usual synchronization concerns when shared
-//! objects are involved. Dynamic variables hold _references_ to objects. Therefore it is entirely
-//! possible to bind _the same_ object to a dynamic variable and access it from multiple threads.
-//! In this case you will probably need some synchronization to use the shared object in a safe
-//! manner, just like you would do when using `Arc` or something.
+//! Note, however, that this does not free you from the usual synchronization
+//! concerns when shared objects are involved. Dynamic variables hold _references_
+//! to objects. Therefore it is entirely possible to bind _the same_ object with
+//! internal mutability to a dynamic variable and access it from multiple threads.
+//! In this case you will probably need some synchronization to use the shared
+//! object in a safe manner, just like you would do when using `Arc` and friends.
 
 use std::cell::UnsafeCell;
 use std::thread::LocalKey;
