@@ -197,6 +197,7 @@
 //! object in a safe manner, just like you would do when using `Arc` and friends.
 
 use std::cell::UnsafeCell;
+use std::mem;
 use std::thread::LocalKey;
 
 /// Declares global dynamic variables.
@@ -325,7 +326,9 @@ impl<T> DynamicVariable<T> {
     /// Access current value of the dynamic variable.
     pub fn get<R>(&self, f: impl FnOnce(Option<&T>) -> R) -> R {
         self.cell.with(|current| {
-            // This is safe usage when paired with set().
+            // This is safe because the lifetime of the reference returned by get()
+            // is limited to this block so it cannot outlive any value set by set()
+            // in the caller frames.
             f(unsafe { current.get() })
         })
     }
@@ -333,8 +336,9 @@ impl<T> DynamicVariable<T> {
     /// Bind a new value to the dynamic variable.
     pub fn set<R>(&self, value: &T, f: impl FnOnce() -> R) -> R {
         self.cell.with(|current| {
-            // This is safe usage when paired with get().
-            let _guard = unsafe { current.set(value) };
+            // This is safe because the guard returned by set() is guaranteed to be
+            // dropped after the thunk returns and before anything else executes.
+            let _guard_ = unsafe { current.set(value) };
             f()
         })
     }
@@ -349,10 +353,9 @@ impl<T> DynamicVariable<T> {
     /// not be dropped until that new assignment is undone.
     #[doc(hidden)]
     pub unsafe fn set_guard(&self, value: &T) -> DynamicCellGuard<T> {
-        use std::mem::transmute;
         // We use transmute to extend the lifetime or "current" to that of "value".
         // This is really the case when assignments are properly scoped.
-        self.cell.with(|current| transmute(current.set(value)))
+        self.cell.with(|current| mem::transmute(current.set(value)))
     }
 }
 
@@ -382,23 +385,24 @@ impl<T> DynamicCell<T> {
     ///
     /// # Safety
     ///
-    /// The returned reference is safe to use during the dynamic extent of a corresponding guard
-    /// returned by a `set()` call. Ensure that this reference does not outlive the set value.
+    /// The returned reference is safe to use during the lifetime of a corresponding guard
+    /// returned by a `set()` call. Ensure that this reference does not outlive it.
     unsafe fn get(&self) -> Option<&T> {
         (&*self.cell.get()).map(|p| &*p)
     }
 
-    /// Temporary set a new value of the cell.
+    /// Temporarily set a new value of the cell.
     ///
-    /// The value will be active while the returned guard object is live. It will be reset back
-    /// to the original value when the guard is dropped.
+    /// The value will be active while the returned guard object is live. It will be reset
+    /// back to the original value (at the moment of the call) when the guard is dropped.
     ///
     /// # Safety
     ///
     /// You have to ensure that the guard for the previous value is dropped after this one.
+    /// That is, they must be dropped in strict LIFO order, like a call stack.
     unsafe fn set(&self, value: &T) -> DynamicCellGuard<T> {
         DynamicCellGuard {
-            old_value: std::mem::replace(&mut *self.cell.get(), Some(value)),
+            old_value: mem::replace(&mut *self.cell.get(), Some(value)),
             cell: self,
         }
     }
@@ -406,11 +410,11 @@ impl<T> DynamicCell<T> {
 
 impl<'a, T> Drop for DynamicCellGuard<'a, T> {
     fn drop(&mut self) {
-        // We can safely drop the new value of a cell and restore the old one provided that get()
-        // set() methods of DynamicCell are used correctly. That is, there are no users of the
-        // new value (which is about to be destroyed).
+        // We can safely drop the new value of a cell and restore the old one provided that
+        // get() and set() methods of DynamicCell are used correctly. That is, there must be
+        // no users of the new value which is about to be destroyed.
         unsafe {
-            std::mem::replace(&mut *self.cell.cell.get(), self.old_value.take());
+            mem::replace(&mut *self.cell.cell.get(), self.old_value.take());
         }
     }
 }
