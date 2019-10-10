@@ -1,54 +1,50 @@
 fluid-let
 =========
 
-<a href="https://github.com/ilammy/fluid-let"><img alt="GitHub Actions status" src="https://github.com/ilammy/fluid-let/workflows/main/badge.svg"></a>
+[![Build Status](https://github.com/ilammy/fluid-let/workflows/Main%20workflow/badge.svg)](https://github.com/ilammy/fluid-let/actions)
+[![Rust Documentation](https://docs.rs/fluid-let/badge.svg)](https://docs.rs/fluid-let)
+[![Latest Version](https://img.shields.io/crates/v/fluid-let.svg)](https://crates.io/crates/fluid-let)
 
-**fluid-let** implements _dynamically-scoped_ variables.
+[**fluid-let**](https://crates.io/crates/fluid-let) implements _dynamically scoped_ variables.
 
-Dynamic or _fluid_ variables are
-a handy way to define global configuration values.
-They come from the Lisp family of languages
-where they are relatively popular for this use case.
+Dynamic or _fluid_ variables are a handy way to define global configuration values.
+They come from the Lisp family of languages where they are relatively popular for this use case.
 
-## Why may I need this?
+## Usage
 
-Normally the configuration can be kept locally:
-as a struct field, or passed via a method argument.
-However, sometimes that's not possible (or feasible)
-and you need a global configuration.
-Dynamic variable binding provides a convenient way
-to access and modify global configuration variables.
+Add this to your Cargo.toml:
 
-A classical example would be
-configuration of the `Debug` output format.
-Suppose you have a `Hash` type for SHA-256 hashes.
-Normally you're not really interested in all 32 bytes
-of the hash value for debugging purposes,
-thus the `Debug` implementation outputs a truncated value:
-`Hash(e3b0c442...)`
-
-But what if at _some places_ you need a different precision?
-(Or three of them?)
-The usual approach would be to introduce a _wrapper type_:
-
-```rust
-pub struct DifferentHash(Hash);
+```toml
+[dependencies]
+fluid-let = "0.1.0"
 ```
 
-for which you implement `Debug` differently.
-However, that's not very convenient
-and sometimes not even possible
-as you need to use _the_ `Hash` type
-or do not have access to its internals.
-
-Dynamically-scoped variables provide an alternative.
-First you define the configuration value:
+You can declare global dynamic variables using `fluid_let!` macro.
+Suppose you want to have a configurable `Debug` implementation for your hashes,
+controlling whether to print out the whole hash or a truncated version:
 
 ```rust
+use fluid_let::fluid_let;
+
 fluid_let!(pub static DEBUG_FULL_HASH: bool);
 ```
 
-Then use it in your `Debug` implementation:
+Enable full print out using the `fluid_set!` macro.
+Assignments to dynamic variables are effective for a certain _dynamic_ scope.
+In this case, while the function is being executed:
+
+```rust
+use fluid_let::fluid_set;
+
+fn some_important_function() {
+    fluid_set!(DEBUG_FULL_HASH, &true);
+
+    // Hashes will be printed out with full precision in this function
+    // as well as in all functions that it calls.
+}
+```
+
+And here is how you can implement `Debug` that uses dynamic configuration:
 
 ```rust
 impl fmt::Debug for Hash {
@@ -71,19 +67,8 @@ impl fmt::Debug for Hash {
 }
 ```
 
-Now your users can configure the truncation dynamically:
-
-```rust
-fn some_important_function() {
-    fluid_set!(DEBUG_FULL_HASH, &true);
-
-    // Hashes will be printed out with full precision in this function
-    // as well as in all functions that it calls.
-}
-```
-
-If they do not configure anything
-then default settings will be used.
+Here we print either the full value of the hash, or a truncated version,
+based on whether debugging mode has been enabled by the caller or not.
 
 ## License
 
