@@ -269,7 +269,7 @@ macro_rules! fluid_let {
         $(#[$attr])*
         $v static $name: $crate::DynamicVariable<$type_> = {
             thread_local! {
-                static VARIABLE: $crate::DynamicCell<$type_> = $crate::DynamicCell::with_static($value);
+                static VARIABLE: $crate::DynamicCell<$type_> = $crate::DynamicCell::new($value);
             }
             $crate::DynamicVariable { cell: &VARIABLE }
         };
@@ -352,13 +352,13 @@ pub struct DynamicVariable<T: 'static> {
 /// A resettable reference.
 #[doc(hidden)]
 pub struct DynamicCell<T> {
-    cell: UnsafeCell<Option<*const T>>,
+    cell: UnsafeCell<Option<T>>,
 }
 
 /// Guard setting a new value of `DynamicCell<T>`.
 #[doc(hidden)]
 pub struct DynamicCellGuard<'a, T> {
-    old_value: Option<*const T>,
+    old_value: Option<T>,
     cell: &'a DynamicCell<T>,
 }
 
@@ -374,7 +374,7 @@ impl<T> DynamicVariable<T> {
     }
 
     /// Bind a new value to the dynamic variable.
-    pub fn set<R>(&self, value: &T, f: impl FnOnce() -> R) -> R {
+    pub fn set<R>(&self, value: T, f: impl FnOnce() -> R) -> R {
         self.cell.with(|current| {
             // This is safe because the guard returned by set() is guaranteed to be
             // dropped after the thunk returns and before anything else executes.
@@ -392,7 +392,7 @@ impl<T> DynamicVariable<T> {
     /// If the variable is assigned another value while this guard is alive, it must
     /// not be dropped until that new assignment is undone.
     #[doc(hidden)]
-    pub unsafe fn set_guard(&self, value: &T) -> DynamicCellGuard<T> {
+    pub unsafe fn set_guard(&self, value: T) -> DynamicCellGuard<T> {
         // We use transmute to extend the lifetime or "current" to that of "value".
         // This is really the case when assignments are properly scoped.
         self.cell.with(|current| mem::transmute(current.set(value)))
@@ -422,7 +422,7 @@ impl<T> DynamicCell<T> {
     }
 
     /// Makes a new cell with value.
-    pub fn with_static(value: &'static T) -> Self {
+    pub fn new(value: T) -> Self {
         DynamicCell {
             cell: UnsafeCell::new(Some(value)),
         }
@@ -447,7 +447,7 @@ impl<T> DynamicCell<T> {
     ///
     /// You have to ensure that the guard for the previous value is dropped after this one.
     /// That is, they must be dropped in strict LIFO order, like a call stack.
-    unsafe fn set(&self, value: &T) -> DynamicCellGuard<T> {
+    unsafe fn set(&self, value: T) -> DynamicCellGuard<T> {
         DynamicCellGuard {
             old_value: mem::replace(&mut *self.cell.get(), Some(value)),
             cell: self,
