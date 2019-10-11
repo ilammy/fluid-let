@@ -184,18 +184,20 @@
 //!
 //! # Thread safety
 //!
-//! Dynamic variables are global and _thread-local_. That is, each thread gets its own independent
-//! instance of a dynamic variable. Values set in one thread are visible only in this thread.
-//! Other threads will not see any changes in values of their dynamic variables and may have
-//! completely different configurations.
+//! Dynamic variables are global and _thread-local_. That is, each thread gets
+//! its own independent instance of a dynamic variable. Values set in one thread
+//! are visible only in this thread. Other threads will not see any changes in
+//! values of their dynamic variables and may have different configurations.
 //!
-//! Note, however, that this does not free you from the usual synchronization concerns when shared
-//! objects are involved. Dynamic variables hold _references_ to objects. Therefore it is entirely
-//! possible to bind _the same_ object to a dynamic variable and access it from multiple threads.
-//! In this case you will probably need some synchronization to use the shared object in a safe
-//! manner, just like you would do when using `Arc` or something.
+//! Note, however, that this does not free you from the usual synchronization
+//! concerns when shared objects are involved. Dynamic variables hold _references_
+//! to objects. Therefore it is entirely possible to bind _the same_ object with
+//! internal mutability to a dynamic variable and access it from multiple threads.
+//! In this case you will probably need some synchronization to use the shared
+//! object in a safe manner, just like you would do when using `Arc` and friends.
 
 use std::cell::UnsafeCell;
+use std::mem;
 use std::thread::LocalKey;
 
 /// Declares global dynamic variables.
@@ -293,7 +295,7 @@ macro_rules! fluid_set {
     ($variable:expr, $value:expr) => {
         // This is safe because the users do not get direct access to the guard
         // and are not able to drop it prematurely, thus maintaining invariants.
-        let guard = unsafe { $variable.set_guard($value) };
+        let _guard_ = unsafe { $variable.set_guard($value) };
     };
 }
 
@@ -324,7 +326,9 @@ impl<T> DynamicVariable<T> {
     /// Access current value of the dynamic variable.
     pub fn get<R>(&self, f: impl FnOnce(Option<&T>) -> R) -> R {
         self.cell.with(|current| {
-            // This is safe usage when paired with set().
+            // This is safe because the lifetime of the reference returned by get()
+            // is limited to this block so it cannot outlive any value set by set()
+            // in the caller frames.
             f(unsafe { current.get() })
         })
     }
@@ -332,8 +336,9 @@ impl<T> DynamicVariable<T> {
     /// Bind a new value to the dynamic variable.
     pub fn set<R>(&self, value: &T, f: impl FnOnce() -> R) -> R {
         self.cell.with(|current| {
-            // This is safe usage when paired with get().
-            let _guard = unsafe { current.set(value) };
+            // This is safe because the guard returned by set() is guaranteed to be
+            // dropped after the thunk returns and before anything else executes.
+            let _guard_ = unsafe { current.set(value) };
             f()
         })
     }
@@ -348,10 +353,9 @@ impl<T> DynamicVariable<T> {
     /// not be dropped until that new assignment is undone.
     #[doc(hidden)]
     pub unsafe fn set_guard(&self, value: &T) -> DynamicCellGuard<T> {
-        use std::mem::transmute;
         // We use transmute to extend the lifetime or "current" to that of "value".
         // This is really the case when assignments are properly scoped.
-        self.cell.with(|current| transmute(current.set(value)))
+        self.cell.with(|current| mem::transmute(current.set(value)))
     }
 }
 
@@ -381,23 +385,24 @@ impl<T> DynamicCell<T> {
     ///
     /// # Safety
     ///
-    /// The returned reference is safe to use during the dynamic extent of a corresponding guard
-    /// returned by a `set()` call. Ensure that this reference does not outlive the set value.
+    /// The returned reference is safe to use during the lifetime of a corresponding guard
+    /// returned by a `set()` call. Ensure that this reference does not outlive it.
     unsafe fn get(&self) -> Option<&T> {
         (&*self.cell.get()).map(|p| &*p)
     }
 
-    /// Temporary set a new value of the cell.
+    /// Temporarily set a new value of the cell.
     ///
-    /// The value will be active while the returned guard object is live. It will be reset back
-    /// to the original value when the guard is dropped.
+    /// The value will be active while the returned guard object is live. It will be reset
+    /// back to the original value (at the moment of the call) when the guard is dropped.
     ///
     /// # Safety
     ///
     /// You have to ensure that the guard for the previous value is dropped after this one.
+    /// That is, they must be dropped in strict LIFO order, like a call stack.
     unsafe fn set(&self, value: &T) -> DynamicCellGuard<T> {
         DynamicCellGuard {
-            old_value: std::mem::replace(&mut *self.cell.get(), Some(value)),
+            old_value: mem::replace(&mut *self.cell.get(), Some(value)),
             cell: self,
         }
     }
@@ -405,11 +410,11 @@ impl<T> DynamicCell<T> {
 
 impl<'a, T> Drop for DynamicCellGuard<'a, T> {
     fn drop(&mut self) {
-        // We can safely drop the new value of a cell and restore the old one provided that get()
-        // set() methods of DynamicCell are used correctly. That is, there are no users of the
-        // new value (which is about to be destroyed).
+        // We can safely drop the new value of a cell and restore the old one provided that
+        // get() and set() methods of DynamicCell are used correctly. That is, there must be
+        // no users of the new value which is about to be destroyed.
         unsafe {
-            std::mem::replace(&mut *self.cell.cell.get(), self.old_value.take());
+            mem::replace(&mut *self.cell.cell.get(), self.old_value.take());
         }
     }
 }
@@ -417,6 +422,9 @@ impl<'a, T> Drop for DynamicCellGuard<'a, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use std::fmt;
+    use std::thread;
 
     #[test]
     fn cell_set_get_guards() {
@@ -456,5 +464,85 @@ mod tests {
             assert_eq!(v.get(), Some(&5));
             // And now there's no one to reset the variable to None state.
         }
+    }
+
+    #[test]
+    fn dynamic_scoping() {
+        fluid_let!(static YEAR: i32);
+
+        YEAR.get(|current| assert_eq!(current, None));
+
+        fluid_set!(YEAR, &2019);
+
+        YEAR.get(|current| assert_eq!(current, Some(&2019)));
+        {
+            fluid_set!(YEAR, &2525);
+
+            YEAR.get(|current| assert_eq!(current, Some(&2525)));
+        }
+        YEAR.get(|current| assert_eq!(current, Some(&2019)));
+    }
+
+    #[test]
+    fn thread_locality() {
+        fluid_let!(static THREAD_ID: i8);
+
+        THREAD_ID.set(&0, || {
+            THREAD_ID.get(|current| assert_eq!(current, Some(&0)));
+            let t = thread::spawn(move || {
+                THREAD_ID.get(|current| assert_eq!(current, None));
+                THREAD_ID.set(&1, || {
+                    THREAD_ID.get(|current| assert_eq!(current, Some(&1)));
+                });
+            });
+            drop(t.join());
+        })
+    }
+
+    #[test]
+    fn convenience_accessors() {
+        fluid_let!(static ENABLED: bool);
+
+        assert_eq!(ENABLED.cloned(), None);
+        assert_eq!(ENABLED.copied(), None);
+
+        ENABLED.set(&true, || assert_eq!(ENABLED.cloned(), Some(true)));
+        ENABLED.set(&true, || assert_eq!(ENABLED.copied(), Some(true)));
+    }
+
+    struct Hash {
+        value: [u8; 16],
+    }
+
+    fluid_let!(pub static DEBUG_FULL_HASH: bool);
+
+    impl fmt::Debug for Hash {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            let full = DEBUG_FULL_HASH.copied().unwrap_or(false);
+
+            write!(f, "Hash(")?;
+            if full {
+                for byte in &self.value {
+                    write!(f, "{:02X}", byte)?;
+                }
+            } else {
+                for byte in &self.value[..4] {
+                    write!(f, "{:02X}", byte)?;
+                }
+                write!(f, "...")?;
+            }
+            write!(f, ")")
+        }
+    }
+
+    #[test]
+    fn readme_example_code() {
+        let hash = Hash { value: [0; 16] };
+        assert_eq!(format!("{:?}", hash), "Hash(00000000...)");
+        fluid_set!(DEBUG_FULL_HASH, &true);
+        assert_eq!(
+            format!("{:?}", hash),
+            "Hash(00000000000000000000000000000000)"
+        );
     }
 }

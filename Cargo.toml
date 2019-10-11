@@ -10,10 +10,6 @@ keywords = ["dynamic", "fluid", "scope", "variables"]
 categories = ["config"]
 license = "MIT"
 
-[badges]
-travis-ci = { repository = "ilammy/fluid-let" }
-appveyor = { repository = "ilammy/fluid-let" }
-
 [dev-dependencies]
 criterion = "0.3.0"
 
