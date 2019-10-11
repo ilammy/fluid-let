@@ -1,7 +1,7 @@
 // Copyright (c) 2019, ilammy
 // Licensed under MIT license (see LICENSE)
 
-//! Dynamically-scoped variables.
+//! Dynamically scoped variables.
 //!
 //! _Dynamic_ or _fluid_ variables are a handy way to define global configuration values.
 //! They come from the Lisp family of languages where they are relatively popular in this role.
@@ -21,7 +21,7 @@
 //! fluid_let!(static LOG_FILE: File);
 //! ```
 //!
-//! The actual type of `LOG_FILE` variable will be `Option<&File>`: that is,
+//! The actual type of `LOG_FILE` variable is `Option<&File>`: that is,
 //! possibly absent reference to a file. All dynamic variables have `None` as
 //! their default value, unless a particular value is set for them.
 //!
