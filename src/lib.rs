@@ -393,9 +393,12 @@ impl<T> DynamicVariable<T> {
     /// not be dropped until that new assignment is undone.
     #[doc(hidden)]
     pub unsafe fn set_guard(&self, value: T) -> DynamicCellGuard<T> {
-        // We use transmute to extend the lifetime or "current" to that of "value".
+        // We use transmute to extend the lifetime or "current" to that of "self".
         // This is really the case when assignments are properly scoped.
-        self.cell.with(|current| mem::transmute(current.set(value)))
+        unsafe fn extend_lifetime<'a, 'b, T>(r: &'a T) -> &'b T {
+            mem::transmute(r)
+        }
+        self.cell.with(|current| extend_lifetime(current).set(value))
     }
 }
 
