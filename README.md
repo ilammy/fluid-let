@@ -1,7 +1,7 @@
 fluid-let
 =========
 
-[![Build Status](https://github.com/ilammy/fluid-let/workflows/Main%20workflow/badge.svg)](https://github.com/ilammy/fluid-let/actions)
+[![Build Status](https://github.com/ilammy/fluid-let/workflows/Tests/badge.svg)](https://github.com/ilammy/fluid-let/actions)
 [![Rust Documentation](https://docs.rs/fluid-let/badge.svg)](https://docs.rs/fluid-let)
 [![Latest Version](https://img.shields.io/crates/v/fluid-let.svg)](https://crates.io/crates/fluid-let)
 
