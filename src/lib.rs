@@ -435,7 +435,7 @@ impl<T> DynamicCell<T> {
     /// The returned reference is safe to use during the lifetime of a corresponding guard
     /// returned by a `set()` call. Ensure that this reference does not outlive it.
     unsafe fn get(&self) -> Option<&T> {
-        (&*self.cell.get()).map(|p| &*p)
+        (*self.cell.get()).as_ref()
     }
 
     /// Temporarily set a new value of the cell.
