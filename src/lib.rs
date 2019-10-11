@@ -11,6 +11,8 @@
 //! [`fluid_let!`] macro is used to declare dynamic variables. Dynamic variables
 //! are _global_, therefore they must be declared as `static`:
 //!
+//! [`fluid_let!`]: macro.fluid_let.html
+//!
 //! ```
 //! use std::fs::File;
 //!
@@ -23,7 +25,18 @@
 //! possibly absent reference to a file. All dynamic variables have `None` as
 //! their default value, unless a particular value is set for them.
 //!
-//! [`fluid_let!`]: macro.fluid_let.html
+//! It is also possible to provide `'static` initialization, if variable type
+//! allows it:
+//!
+//! ```no_run
+//! # use fluid_let::fluid_let;
+//! #
+//! # enum LogLevel { Info }
+//! #
+//! fluid_let!(static LOG_LEVEL: LogLevel = &LogLevel::Info);
+//! ```
+//!
+//! Here `LOG_LEVEL` has `Some(&LogLevel::Info)` as its default value.
 //!
 //! # Setting dynamic variables
 //!
@@ -208,6 +221,13 @@ use std::thread::LocalKey;
 ///
 /// ```
 /// # use fluid_let::fluid_let;
+/// fluid_let!(static ENABLED: bool = &true);
+/// ```
+///
+/// Default value is optional:
+///
+/// ```
+/// # use fluid_let::fluid_let;
 /// fluid_let!(static ENABLED: bool);
 /// ```
 ///
@@ -217,7 +237,7 @@ use std::thread::LocalKey;
 /// # use fluid_let::fluid_let;
 /// fluid_let! {
 ///     /// Length of `Debug` representation of hashes in characters.
-///     pub static HASH_LENGTH: usize;
+///     pub static HASH_LENGTH: usize = &32;
 ///
 ///     /// If set to true then passwords will be printed to logs.
 ///     #[cfg(test)]
