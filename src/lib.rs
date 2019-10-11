@@ -480,10 +480,10 @@ mod tests {
             let v = DynamicCell::empty();
             assert_eq!(v.get(), None);
             {
-                let _g = v.set(&5);
+                let _g = v.set(5);
                 assert_eq!(v.get(), Some(&5));
                 {
-                    let _g = v.set(&10);
+                    let _g = v.set(10);
                     assert_eq!(v.get(), Some(&10));
                 }
                 assert_eq!(v.get(), Some(&5));
@@ -497,8 +497,8 @@ mod tests {
         // but it is not safe in general case allowed by the API.
         unsafe {
             let v = DynamicCell::empty();
-            let g1 = v.set(&5);
-            let g2 = v.set(&10);
+            let g1 = v.set(5);
+            let g2 = v.set(10);
             assert_eq!(v.get(), Some(&10));
             // Specifically, you CANNOT do this:
             drop(g1);
@@ -515,14 +515,14 @@ mod tests {
 
     #[test]
     fn static_initializer() {
-        fluid_let!(static NUMBER: i32 = &42);
+        fluid_let!(static NUMBER: i32 = 42);
 
         assert_eq!(NUMBER.copied(), Some(42));
 
         fluid_let! {
-            static NUMBER_1: i32 = &100;
+            static NUMBER_1: i32 = 100;
             static NUMBER_2: i32;
-            static NUMBER_3: i32 = &200;
+            static NUMBER_3: i32 = 200;
         }
 
         assert_eq!(NUMBER_1.copied(), Some(100));
@@ -536,11 +536,11 @@ mod tests {
 
         YEAR.get(|current| assert_eq!(current, None));
 
-        fluid_set!(YEAR, &2019);
+        fluid_set!(YEAR, 2019);
 
         YEAR.get(|current| assert_eq!(current, Some(&2019)));
         {
-            fluid_set!(YEAR, &2525);
+            fluid_set!(YEAR, 2525);
 
             YEAR.get(|current| assert_eq!(current, Some(&2525)));
         }
@@ -551,11 +551,11 @@ mod tests {
     fn thread_locality() {
         fluid_let!(static THREAD_ID: i8);
 
-        THREAD_ID.set(&0, || {
+        THREAD_ID.set(0, || {
             THREAD_ID.get(|current| assert_eq!(current, Some(&0)));
             let t = thread::spawn(move || {
                 THREAD_ID.get(|current| assert_eq!(current, None));
-                THREAD_ID.set(&1, || {
+                THREAD_ID.set(1, || {
                     THREAD_ID.get(|current| assert_eq!(current, Some(&1)));
                 });
             });
@@ -570,8 +570,8 @@ mod tests {
         assert_eq!(ENABLED.cloned(), None);
         assert_eq!(ENABLED.copied(), None);
 
-        ENABLED.set(&true, || assert_eq!(ENABLED.cloned(), Some(true)));
-        ENABLED.set(&true, || assert_eq!(ENABLED.copied(), Some(true)));
+        ENABLED.set(true, || assert_eq!(ENABLED.cloned(), Some(true)));
+        ENABLED.set(true, || assert_eq!(ENABLED.copied(), Some(true)));
     }
 
     struct Hash {
@@ -603,7 +603,7 @@ mod tests {
     fn readme_example_code() {
         let hash = Hash { value: [0; 16] };
         assert_eq!(format!("{:?}", hash), "Hash(00000000...)");
-        fluid_set!(DEBUG_FULL_HASH, &true);
+        fluid_set!(DEBUG_FULL_HASH, true);
         assert_eq!(
             format!("{:?}", hash),
             "Hash(00000000000000000000000000000000)"
