@@ -228,28 +228,48 @@ use std::thread::LocalKey;
 /// See also [crate-level documentation](index.html) for usage examples.
 #[macro_export]
 macro_rules! fluid_let {
-    // Simple case: a single definition.
+    // Simple case: a single definition with None value.
     {
         $(#[$attr:meta])*
         $v:vis static $name:ident: $type_:ty
     } => {
         $(#[$attr])*
         $v static $name: $crate::DynamicVariable<$type_> = {
-            // We have to work around the stupid API of thread-local variables in Rust.
-            // Hence this atrocity for initialization.
             thread_local! {
                 static VARIABLE: $crate::DynamicCell<$type_> = $crate::DynamicCell::empty();
             }
             $crate::DynamicVariable { cell: &VARIABLE }
         };
     };
-    // Multiple definitions (iteration).
+    // Simple case: a single definition with Some value.
+    {
+        $(#[$attr:meta])*
+        $v:vis static $name:ident: $type_:ty = $value:expr
+    } => {
+        $(#[$attr])*
+        $v static $name: $crate::DynamicVariable<$type_> = {
+            thread_local! {
+                static VARIABLE: $crate::DynamicCell<$type_> = $crate::DynamicCell::with_static($value);
+            }
+            $crate::DynamicVariable { cell: &VARIABLE }
+        };
+    };
+    // Multiple definitions (iteration), with None value.
     {
         $(#[$attr:meta])*
         $v:vis static $name:ident: $type_:ty;
         $($rest:tt)*
     } => {
         $crate::fluid_let!($(#[$attr])* $v static $name: $type_);
+        $crate::fluid_let!($($rest)*);
+    };
+    // Multiple definitions (iteration), with Some value.
+    {
+        $(#[$attr:meta])*
+        $v:vis static $name:ident: $type_:ty = $value:expr;
+        $($rest:tt)*
+    } => {
+        $crate::fluid_let!($(#[$attr])* $v static $name: $type_ = $value);
         $crate::fluid_let!($($rest)*);
     };
     // No definitions (recursion base).
@@ -381,6 +401,13 @@ impl<T> DynamicCell<T> {
         }
     }
 
+    /// Makes a new cell with value.
+    pub fn with_static(value: &'static T) -> Self {
+        DynamicCell {
+            cell: UnsafeCell::new(Some(value)),
+        }
+    }
+
     /// Access the current value of the cell, if any.
     ///
     /// # Safety
@@ -464,6 +491,23 @@ mod tests {
             assert_eq!(v.get(), Some(&5));
             // And now there's no one to reset the variable to None state.
         }
+    }
+
+    #[test]
+    fn static_initializer() {
+        fluid_let!(static NUMBER: i32 = &42);
+
+        assert_eq!(NUMBER.copied(), Some(42));
+
+        fluid_let! {
+            static NUMBER_1: i32 = &100;
+            static NUMBER_2: i32;
+            static NUMBER_3: i32 = &200;
+        }
+
+        assert_eq!(NUMBER_1.copied(), Some(100));
+        assert_eq!(NUMBER_2.copied(), None);
+        assert_eq!(NUMBER_3.copied(), Some(200));
     }
 
     #[test]
