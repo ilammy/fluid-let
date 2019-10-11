@@ -221,7 +221,7 @@ use std::thread::LocalKey;
 ///
 /// ```
 /// # use fluid_let::fluid_let;
-/// fluid_let!(static ENABLED: bool = &true);
+/// fluid_let!(static ENABLED: bool = true);
 /// ```
 ///
 /// Default value is optional:
@@ -237,7 +237,7 @@ use std::thread::LocalKey;
 /// # use fluid_let::fluid_let;
 /// fluid_let! {
 ///     /// Length of `Debug` representation of hashes in characters.
-///     pub static HASH_LENGTH: usize = &32;
+///     pub static HASH_LENGTH: usize = 32;
 ///
 ///     /// If set to true then passwords will be printed to logs.
 ///     #[cfg(test)]
@@ -309,7 +309,7 @@ macro_rules! fluid_let {
 /// fluid_let!(static ENABLED: bool);
 ///
 /// fn some_function() {
-///     fluid_set!(ENABLED, &true);
+///     fluid_set!(ENABLED, true);
 ///
 ///     // function body
 /// }
@@ -323,7 +323,7 @@ macro_rules! fluid_let {
 /// # fluid_let!(static ENABLED: bool);
 /// #
 /// fn some_function() {
-///     ENABLED.set(&true, || {
+///     ENABLED.set(true, || {
 ///         // function body
 ///     });
 /// }
