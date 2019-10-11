@@ -22,7 +22,7 @@ jobs:
       with:
         toolchain: stable
     - name: Set up gnuplot
-      run: sudo apt-get install gnuplot
+      run: sudo apt-get update && sudo apt-get install gnuplot
 
     - name: Check out old code
       uses: actions/checkout@v1
