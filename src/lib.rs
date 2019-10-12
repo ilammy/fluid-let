@@ -115,18 +115,21 @@
 //! [`get`]: struct.DynamicVariable.html#method.get
 //!
 //! ```no_run
+//! # use std::cell::RefCell;
 //! # use std::io::{self, Write};
 //! # use std::fs::File;
 //! #
 //! # use fluid_let::fluid_let;
-//! #
-//! # fluid_let!(static LOG_FILE: Option<File> = None);
+//! # fn f() -> File { unimplemented!() }
+//! # fluid_let!(static LOG_FILE: RefCell<File> = RefCell::new(f()));
 //! #
 //! fn write_log(msg: &str) -> io::Result<()> {
-//!     LOG_FILE.get(|current| {
-//!         if let Some(mut log_file) = current {
-//!             write!(log_file, "{}\n", msg)?;
-//!         }
+//!     LOG_FILE.get(|current: &RefCell<File>| {
+//! //        if let Some(mut log_file) = current.as_ref().map(|f| f.borrow_mut()) {
+//! //            write!(log_file, "{}\n", msg)?;
+//! //        }
+//!         let log_file = current.borrow_mut();
+//!         write!(log_file, "{}\n", msg)?;
 //!         Ok(())
 //!     })
 //! }
@@ -193,6 +196,7 @@
 use std::borrow::Borrow;
 use std::cell::UnsafeCell;
 use std::mem;
+use std::ptr;
 use std::thread::LocalKey;
 
 /// Declares global dynamic variables.
@@ -230,9 +234,8 @@ macro_rules! fluid_let {
     } => {
         $(#[$attr])*
         $v static $name: $crate::DynamicVariable<$type_> = {
-            static DEFAULT: $type_ = $value;
             thread_local! {
-                static VARIABLE: $crate::DynamicCell<$type_> = $crate::DynamicCell::with_static(&DEFAULT);
+                static VARIABLE: $crate::DynamicCell<$type_> = $crate::DynamicCell::new($value);
             }
             $crate::DynamicVariable { cell: &VARIABLE }
         };
@@ -308,6 +311,7 @@ pub struct DynamicVariable<T: 'static> {
 #[doc(hidden)]
 pub struct DynamicCell<T> {
     cell: UnsafeCell<*const T>,
+    init: T,
 }
 
 /// Guard setting a new value of `DynamicCell<T>`.
@@ -374,9 +378,16 @@ impl<T: Copy> DynamicVariable<T> {
 
 impl<T> DynamicCell<T> {
     /// Makes a new cell with value.
-    pub fn with_static(value: &'static T) -> Self {
+    pub fn new(value: T) -> Self {
         DynamicCell {
-            cell: UnsafeCell::new(value),
+            cell: UnsafeCell::new(ptr::null()),
+            init: value,
+        }
+    }
+
+    unsafe fn arm(&self) {
+        if self.cell.get().is_null() {
+            *self.cell.get() = &self.init;
         }
     }
 
@@ -384,9 +395,12 @@ impl<T> DynamicCell<T> {
     ///
     /// # Safety
     ///
+    /// This method may be called only after the cell has been initialized and armed.
+    ///
     /// The returned reference is safe to use during the lifetime of a corresponding guard
     /// returned by a `set()` call. Ensure that this reference does not outlive it.
     unsafe fn get(&self) -> &T {
+        self.arm();
         &**self.cell.get()
     }
 
@@ -397,9 +411,12 @@ impl<T> DynamicCell<T> {
     ///
     /// # Safety
     ///
+    /// This method may be called only after the cell has been initialized and armed.
+    ///
     /// You have to ensure that the guard for the previous value is dropped after this one.
     /// That is, they must be dropped in strict LIFO order, like a call stack.
     unsafe fn set(&self, value: &T) -> DynamicCellGuard<T> {
+        self.arm();
         DynamicCellGuard {
             old_value: mem::replace(&mut *self.cell.get(), value),
             cell: self,
@@ -429,7 +446,8 @@ mod tests {
     fn cell_set_get_guards() {
         // This is how properly scoped usage of DynamicCell works.
         unsafe {
-            let v = DynamicCell::with_static(&0);
+            let v = DynamicCell::new(0);
+            v.arm();
             assert_eq!(v.get(), &0);
             {
                 let _g = v.set(&5);
@@ -448,7 +466,8 @@ mod tests {
         // The following is safe because references to constants are 'static,
         // but it is not safe in general case allowed by the API.
         unsafe {
-            let v = DynamicCell::with_static(&0);
+            let v = DynamicCell::new(0);
+            v.arm();
             let g1 = v.set(&5);
             let g2 = v.set(&10);
             assert_eq!(v.get(), &10);
