@@ -313,19 +313,19 @@ pub struct DynamicVariable<T: 'static> {
 /// A resettable reference.
 #[doc(hidden)]
 pub struct DynamicCell<T> {
-    cell: UnsafeCell<Option<*const T>>,
+    cell: UnsafeCell<*const T>,
 }
 
 /// Guard setting a new value of `DynamicCell<T>`.
 #[doc(hidden)]
 pub struct DynamicCellGuard<'a, T> {
-    old_value: Option<*const T>,
+    old_value: *const T,
     cell: &'a DynamicCell<T>,
 }
 
 impl<T> DynamicVariable<T> {
     /// Access current value of the dynamic variable.
-    pub fn get<R>(&self, f: impl FnOnce(Option<&T>) -> R) -> R {
+    pub fn get<R>(&self, f: impl FnOnce(&T) -> R) -> R {
         self.cell.with(|current| {
             // This is safe because the lifetime of the reference returned by get()
             // is limited to this block so it cannot outlive any value set by set()
@@ -366,30 +366,23 @@ impl<T> DynamicVariable<T> {
 
 impl<T: Clone> DynamicVariable<T> {
     /// Clone current value of the dynamic variable.
-    pub fn cloned(&self) -> Option<T> {
-        self.get(|value| value.cloned())
+    pub fn cloned(&self) -> T {
+        self.get(|value| value.clone())
     }
 }
 
 impl<T: Copy> DynamicVariable<T> {
     /// Copy current value of the dynamic variable.
-    pub fn copied(&self) -> Option<T> {
-        self.get(|value| value.copied())
+    pub fn copied(&self) -> T {
+        self.get(|value| *value)
     }
 }
 
 impl<T> DynamicCell<T> {
-    /// Makes a new empty cell.
-    pub fn empty() -> Self {
-        DynamicCell {
-            cell: UnsafeCell::new(None),
-        }
-    }
-
     /// Makes a new cell with value.
     pub fn with_static(value: &'static T) -> Self {
         DynamicCell {
-            cell: UnsafeCell::new(Some(value)),
+            cell: UnsafeCell::new(value),
         }
     }
 
@@ -399,8 +392,8 @@ impl<T> DynamicCell<T> {
     ///
     /// The returned reference is safe to use during the lifetime of a corresponding guard
     /// returned by a `set()` call. Ensure that this reference does not outlive it.
-    unsafe fn get(&self) -> Option<&T> {
-        (&*self.cell.get()).map(|p| &*p)
+    unsafe fn get(&self) -> &T {
+        &**self.cell.get()
     }
 
     /// Temporarily set a new value of the cell.
@@ -414,7 +407,7 @@ impl<T> DynamicCell<T> {
     /// That is, they must be dropped in strict LIFO order, like a call stack.
     unsafe fn set(&self, value: &T) -> DynamicCellGuard<T> {
         DynamicCellGuard {
-            old_value: mem::replace(&mut *self.cell.get(), Some(value)),
+            old_value: mem::replace(&mut *self.cell.get(), value),
             cell: self,
         }
     }
@@ -426,7 +419,7 @@ impl<'a, T> Drop for DynamicCellGuard<'a, T> {
         // get() and set() methods of DynamicCell are used correctly. That is, there must be
         // no users of the new value which is about to be destroyed.
         unsafe {
-            *self.cell.cell.get() = self.old_value.take();
+            *self.cell.cell.get() = self.old_value;
         }
     }
 }
@@ -442,16 +435,16 @@ mod tests {
     fn cell_set_get_guards() {
         // This is how properly scoped usage of DynamicCell works.
         unsafe {
-            let v = DynamicCell::empty();
-            assert_eq!(v.get(), None);
+            let v = DynamicCell::with_static(&0);
+            assert_eq!(v.get(), &0);
             {
                 let _g = v.set(&5);
-                assert_eq!(v.get(), Some(&5));
+                assert_eq!(v.get(), &5);
                 {
                     let _g = v.set(&10);
-                    assert_eq!(v.get(), Some(&10));
+                    assert_eq!(v.get(), &10);
                 }
-                assert_eq!(v.get(), Some(&5));
+                assert_eq!(v.get(), &5);
             }
         }
     }
@@ -461,19 +454,19 @@ mod tests {
         // The following is safe because references to constants are 'static,
         // but it is not safe in general case allowed by the API.
         unsafe {
-            let v = DynamicCell::empty();
+            let v = DynamicCell::with_static(&0);
             let g1 = v.set(&5);
             let g2 = v.set(&10);
-            assert_eq!(v.get(), Some(&10));
+            assert_eq!(v.get(), &10);
             // Specifically, you CANNOT do this:
             drop(g1);
             // g1 *must* outlive g2 or else you'll that values are restored in
             // incorrect order. Here we observe the value before "5" was set.
-            assert_eq!(v.get(), None);
+            assert_eq!(v.get(), &0);
             // When g2 gets dropped it restores the value set by g1, which
             // may not be a valid reference at this point.
             drop(g2);
-            assert_eq!(v.get(), Some(&5));
+            assert_eq!(v.get(), &5);
             // And now there's no one to reset the variable to None state.
         }
     }
@@ -482,7 +475,7 @@ mod tests {
     fn static_initializer() {
         fluid_let!(static NUMBER: i32 = 42);
 
-        assert_eq!(NUMBER.copied(), Some(42));
+        assert_eq!(NUMBER.copied(), 42);
 
         fluid_let! {
             static NUMBER_1: i32 = 100;
@@ -490,26 +483,26 @@ mod tests {
             static NUMBER_3: i32 = 300;
         }
 
-        assert_eq!(NUMBER_1.copied(), Some(100));
-        assert_eq!(NUMBER_2.copied(), Some(200));
-        assert_eq!(NUMBER_3.copied(), Some(300));
+        assert_eq!(NUMBER_1.copied(), 100);
+        assert_eq!(NUMBER_2.copied(), 200);
+        assert_eq!(NUMBER_3.copied(), 300);
     }
 
     #[test]
     fn dynamic_scoping() {
         fluid_let!(static YEAR: i32 = 1986);
 
-        YEAR.get(|current| assert_eq!(current, Some(&1986)));
+        YEAR.get(|current| assert_eq!(current, &1986));
 
         fluid_set!(YEAR, 2019);
 
-        YEAR.get(|current| assert_eq!(current, Some(&2019)));
+        YEAR.get(|current| assert_eq!(current, &2019));
         {
             fluid_set!(YEAR, 2525);
 
-            YEAR.get(|current| assert_eq!(current, Some(&2525)));
+            YEAR.get(|current| assert_eq!(current, &2525));
         }
-        YEAR.get(|current| assert_eq!(current, Some(&2019)));
+        YEAR.get(|current| assert_eq!(current, &2019));
     }
 
     #[test]
@@ -518,17 +511,17 @@ mod tests {
 
         // Temporary value
         fluid_set!(YEAR, 10);
-        assert_eq!(YEAR.copied(), Some(10));
+        assert_eq!(YEAR.copied(), 10);
 
         // Local reference
         let current_year = 20;
         fluid_set!(YEAR, &current_year);
-        assert_eq!(YEAR.copied(), Some(20));
+        assert_eq!(YEAR.copied(), 20);
 
         // Heap reference
         let current_year = Box::new(30);
         fluid_set!(YEAR, current_year);
-        assert_eq!(YEAR.copied(), Some(30));
+        assert_eq!(YEAR.copied(), 30);
     }
 
     #[test]
@@ -536,11 +529,11 @@ mod tests {
         fluid_let!(static THREAD_ID: i8 = -1);
 
         THREAD_ID.set(0, || {
-            THREAD_ID.get(|current| assert_eq!(current, Some(&0)));
+            THREAD_ID.get(|current| assert_eq!(current, &0));
             let t = thread::spawn(move || {
-                THREAD_ID.get(|current| assert_eq!(current, None));
+                THREAD_ID.get(|current| assert_eq!(current, &-1));
                 THREAD_ID.set(1, || {
-                    THREAD_ID.get(|current| assert_eq!(current, Some(&1)));
+                    THREAD_ID.get(|current| assert_eq!(current, &1));
                 });
             });
             drop(t.join());
@@ -551,11 +544,11 @@ mod tests {
     fn convenience_accessors() {
         fluid_let!(static ENABLED: bool = false);
 
-        assert_eq!(ENABLED.cloned(), Some(false));
-        assert_eq!(ENABLED.copied(), Some(false));
+        assert_eq!(ENABLED.cloned(), false);
+        assert_eq!(ENABLED.copied(), false);
 
-        ENABLED.set(true, || assert_eq!(ENABLED.cloned(), Some(true)));
-        ENABLED.set(true, || assert_eq!(ENABLED.copied(), Some(true)));
+        ENABLED.set(true, || assert_eq!(ENABLED.cloned(), true));
+        ENABLED.set(true, || assert_eq!(ENABLED.copied(), true));
     }
 
     struct Hash {
@@ -566,7 +559,7 @@ mod tests {
 
     impl fmt::Debug for Hash {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            let full = DEBUG_FULL_HASH.copied().unwrap_or(false);
+            let full = DEBUG_FULL_HASH.copied();
 
             write!(f, "Hash(")?;
             if full {
