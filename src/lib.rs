@@ -18,25 +18,12 @@
 //!
 //! use fluid_let::fluid_let;
 //!
-//! fluid_let!(static LOG_FILE: File);
+//! fluid_let!(static LOG_FILE: Option<File> = None);
 //! ```
 //!
-//! The actual type of `LOG_FILE` variable is `Option<&File>`: that is,
-//! possibly absent reference to a file. All dynamic variables have `None` as
-//! their default value, unless a particular value is set for them.
-//!
-//! It is also possible to provide `'static` initialization, if variable type
-//! allows it:
-//!
-//! ```no_run
-//! # use fluid_let::fluid_let;
-//! #
-//! # enum LogLevel { Info }
-//! #
-//! fluid_let!(static LOG_LEVEL: LogLevel = LogLevel::Info);
-//! ```
-//!
-//! Here `LOG_LEVEL` has `Some(&LogLevel::Info)` as its default value.
+//! You also have to provide an initial value for the variable. Since it is static,
+//! complex types like `File` may need runtime initialization. Here we use `Option`
+//! to initialize the variable statically to a placeholder value.
 //!
 //! # Setting dynamic variables
 //!
@@ -49,13 +36,13 @@
 //! #
 //! # use fluid_let::fluid_let;
 //! #
-//! # fluid_let!(static LOG_FILE: File);
+//! # fluid_let!(static LOG_FILE: Option<File> = None);
 //! #
 //! # fn open(path: &str) -> File { unimplemented!() }
 //! #
 //! let log_file: File = open("/tmp/log.txt");
 //!
-//! LOG_FILE.set(log_file, || {
+//! LOG_FILE.set(Some(log_file), || {
 //!     //
 //!     // logs will be redirected to /tmp/log.txt in this block
 //!     //
@@ -80,14 +67,14 @@
 //! #
 //! # use fluid_let::fluid_let;
 //! #
-//! # fluid_let!(static LOG_FILE: File);
+//! # fluid_let!(static LOG_FILE: Option<File> = None);
 //! #
 //! # fn open(path: &str) -> File { unimplemented!() }
 //! #
 //! use fluid_let::fluid_set;
 //!
 //! fn chatterbox_function() {
-//!     fluid_set!(LOG_FILE, open("/dev/null"));
+//!     fluid_set!(LOG_FILE, Some(open("/dev/null")));
 //!     //
 //!     // logs will be written to /dev/null in this function
 //!     //
@@ -101,18 +88,18 @@
 //! #
 //! # use fluid_let::{fluid_let, fluid_set};
 //! #
-//! # fluid_let!(static LOG_FILE: File);
+//! # fluid_let!(static LOG_FILE: Option<File> = None);
 //! #
 //! # fn open(path: &str) -> File { unimplemented!() }
 //! #
-//! LOG_FILE.set(open("A.txt"), || {
+//! LOG_FILE.set(Some(open("A.txt")), || {
 //!     // log to A.txt here
-//!     LOG_FILE.set(open("/dev/null"), || {
+//!     LOG_FILE.set(Some(open("/dev/null")), || {
 //!         // log to /dev/null for a bit
-//!         fluid_set!(LOG_FILE, open("B.txt"));
+//!         fluid_set!(LOG_FILE, Some(open("B.txt")));
 //!         // log to B.txt starting with this line
 //!         {
-//!             fluid_set!(LOG_FILE, open("C.txt"));
+//!             fluid_set!(LOG_FILE, Some(open("C.txt")));
 //!             // but in this block log to C.txt
 //!         }
 //!         // before going back to using B.txt here
@@ -133,7 +120,7 @@
 //! #
 //! # use fluid_let::fluid_let;
 //! #
-//! # fluid_let!(static LOG_FILE: File);
+//! # fluid_let!(static LOG_FILE: Option<File> = None);
 //! #
 //! fn write_log(msg: &str) -> io::Result<()> {
 //!     LOG_FILE.get(|current| {
@@ -165,7 +152,7 @@
 //! #
 //! # use fluid_let::fluid_let;
 //! #
-//! # fluid_let!(static LOG_FILE: File);
+//! # fluid_let!(static LOG_FILE: Option<File> = None);
 //! #
 //! #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 //! enum LogLevel {
@@ -225,13 +212,6 @@ use std::thread::LocalKey;
 /// fluid_let!(static ENABLED: bool = true);
 /// ```
 ///
-/// Default value is optional:
-///
-/// ```
-/// # use fluid_let::fluid_let;
-/// fluid_let!(static ENABLED: bool);
-/// ```
-///
 /// Multiple declarations with attributes and visibility modifiers are also supported:
 ///
 /// ```
@@ -242,27 +222,14 @@ use std::thread::LocalKey;
 ///
 ///     /// If set to true then passwords will be printed to logs.
 ///     #[cfg(test)]
-///     static DUMP_PASSWORDS: bool;
+///     static DUMP_PASSWORDS: bool = false;
 /// }
 /// ```
 ///
 /// See also [crate-level documentation](index.html) for usage examples.
 #[macro_export]
 macro_rules! fluid_let {
-    // Simple case: a single definition with None value.
-    {
-        $(#[$attr:meta])*
-        $v:vis static $name:ident: $type_:ty
-    } => {
-        $(#[$attr])*
-        $v static $name: $crate::DynamicVariable<$type_> = {
-            thread_local! {
-                static VARIABLE: $crate::DynamicCell<$type_> = $crate::DynamicCell::empty();
-            }
-            $crate::DynamicVariable { cell: &VARIABLE }
-        };
-    };
-    // Simple case: a single definition with Some value.
+    // Simple case: a single definition.
     {
         $(#[$attr:meta])*
         $v:vis static $name:ident: $type_:ty = $value:expr
@@ -276,16 +243,7 @@ macro_rules! fluid_let {
             $crate::DynamicVariable { cell: &VARIABLE }
         };
     };
-    // Multiple definitions (iteration), with None value.
-    {
-        $(#[$attr:meta])*
-        $v:vis static $name:ident: $type_:ty;
-        $($rest:tt)*
-    } => {
-        $crate::fluid_let!($(#[$attr])* $v static $name: $type_);
-        $crate::fluid_let!($($rest)*);
-    };
-    // Multiple definitions (iteration), with Some value.
+    // Multiple definitions (iteration).
     {
         $(#[$attr:meta])*
         $v:vis static $name:ident: $type_:ty = $value:expr;
@@ -308,7 +266,7 @@ macro_rules! fluid_let {
 /// ```no_run
 /// use fluid_let::{fluid_let, fluid_set};
 ///
-/// fluid_let!(static ENABLED: bool);
+/// fluid_let!(static ENABLED: bool = false);
 ///
 /// fn some_function() {
 ///     fluid_set!(ENABLED, &true);
@@ -322,7 +280,7 @@ macro_rules! fluid_let {
 /// ```no_run
 /// # use fluid_let::{fluid_let, fluid_set};
 /// #
-/// # fluid_let!(static ENABLED: bool);
+/// # fluid_let!(static ENABLED: bool = false);
 /// #
 /// fn some_function() {
 ///     ENABLED.set(&true, || {
@@ -528,20 +486,20 @@ mod tests {
 
         fluid_let! {
             static NUMBER_1: i32 = 100;
-            static NUMBER_2: i32;
-            static NUMBER_3: i32 = 200;
+            static NUMBER_2: i32 = 200;
+            static NUMBER_3: i32 = 300;
         }
 
         assert_eq!(NUMBER_1.copied(), Some(100));
-        assert_eq!(NUMBER_2.copied(), None);
-        assert_eq!(NUMBER_3.copied(), Some(200));
+        assert_eq!(NUMBER_2.copied(), Some(200));
+        assert_eq!(NUMBER_3.copied(), Some(300));
     }
 
     #[test]
     fn dynamic_scoping() {
-        fluid_let!(static YEAR: i32);
+        fluid_let!(static YEAR: i32 = 1986);
 
-        YEAR.get(|current| assert_eq!(current, None));
+        YEAR.get(|current| assert_eq!(current, Some(&1986)));
 
         fluid_set!(YEAR, 2019);
 
@@ -556,7 +514,7 @@ mod tests {
 
     #[test]
     fn references() {
-        fluid_let!(static YEAR: i32);
+        fluid_let!(static YEAR: i32 = -1);
 
         // Temporary value
         fluid_set!(YEAR, 10);
@@ -575,7 +533,7 @@ mod tests {
 
     #[test]
     fn thread_locality() {
-        fluid_let!(static THREAD_ID: i8);
+        fluid_let!(static THREAD_ID: i8 = -1);
 
         THREAD_ID.set(0, || {
             THREAD_ID.get(|current| assert_eq!(current, Some(&0)));
@@ -591,10 +549,10 @@ mod tests {
 
     #[test]
     fn convenience_accessors() {
-        fluid_let!(static ENABLED: bool);
+        fluid_let!(static ENABLED: bool = false);
 
-        assert_eq!(ENABLED.cloned(), None);
-        assert_eq!(ENABLED.copied(), None);
+        assert_eq!(ENABLED.cloned(), Some(false));
+        assert_eq!(ENABLED.copied(), Some(false));
 
         ENABLED.set(true, || assert_eq!(ENABLED.cloned(), Some(true)));
         ENABLED.set(true, || assert_eq!(ENABLED.copied(), Some(true)));
@@ -604,7 +562,7 @@ mod tests {
         value: [u8; 16],
     }
 
-    fluid_let!(pub static DEBUG_FULL_HASH: bool);
+    fluid_let!(pub static DEBUG_FULL_HASH: bool = false);
 
     impl fmt::Debug for Hash {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
