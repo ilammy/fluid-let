@@ -401,7 +401,8 @@ impl<T> DynamicVariable<T> {
         unsafe fn extend_lifetime<'a, 'b, T>(r: &'a T) -> &'b T {
             mem::transmute(r)
         }
-        self.cell.with(|current| extend_lifetime(current).set(value))
+        self.cell
+            .with(|current| extend_lifetime(current).set(value))
     }
 }
 
