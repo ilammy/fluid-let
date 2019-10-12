@@ -3,11 +3,6 @@
 
 The version currently under development.
 
-Breaking changes:
-
-- `set()` now accepts only `&T` instead of `Borrow<T>`, avoiding implicit
-  temporary copies of types implementing `Copy`.
-
 New features:
 
 - Convenience getters `copied()` and `cloned()` for copyable types.

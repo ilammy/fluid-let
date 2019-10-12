@@ -22,7 +22,7 @@ fn get(c: &mut Criterion) {
     group.bench_function(BenchmarkId::new("get", "dynamic"), |b| {
         fluid_let!(static COUNTER: i32);
         let mut total = 0;
-        COUNTER.set(&1, || {
+        COUNTER.set(1, || {
             b.iter(|| COUNTER.get(|value| read_and_add(&mut total, value.unwrap_or(&0))));
         });
     });
@@ -44,7 +44,7 @@ fn set(c: &mut Criterion) {
         fluid_let!(static COUNTER: i32);
         static MAGIC_VALUE: i32 = 42;
         let mut total = 0;
-        b.iter(|| COUNTER.set(&MAGIC_VALUE, || read_and_add(&mut total, &MAGIC_VALUE)));
+        b.iter(|| COUNTER.set(MAGIC_VALUE, || read_and_add(&mut total, &MAGIC_VALUE)));
     });
     group.bench_function(BenchmarkId::new("set", "static"), |b| {
         static mut COUNTER: Option<&i32> = None;
