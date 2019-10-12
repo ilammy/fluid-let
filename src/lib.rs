@@ -33,7 +33,7 @@
 //! #
 //! # enum LogLevel { Info }
 //! #
-//! fluid_let!(static LOG_LEVEL: LogLevel = &LogLevel::Info);
+//! fluid_let!(static LOG_LEVEL: LogLevel = LogLevel::Info);
 //! ```
 //!
 //! Here `LOG_LEVEL` has `Some(&LogLevel::Info)` as its default value.
@@ -55,7 +55,7 @@
 //! #
 //! let log_file: File = open("/tmp/log.txt");
 //!
-//! LOG_FILE.set(&log_file, || {
+//! LOG_FILE.set(log_file, || {
 //!     //
 //!     // logs will be redirected to /tmp/log.txt in this block
 //!     //
@@ -87,7 +87,7 @@
 //! use fluid_let::fluid_set;
 //!
 //! fn chatterbox_function() {
-//!     fluid_set!(LOG_FILE, &open("/dev/null"));
+//!     fluid_set!(LOG_FILE, open("/dev/null"));
 //!     //
 //!     // logs will be written to /dev/null in this function
 //!     //
@@ -105,14 +105,14 @@
 //! #
 //! # fn open(path: &str) -> File { unimplemented!() }
 //! #
-//! LOG_FILE.set(&open("A.txt"), || {
+//! LOG_FILE.set(open("A.txt"), || {
 //!     // log to A.txt here
-//!     LOG_FILE.set(&open("/dev/null"), || {
+//!     LOG_FILE.set(open("/dev/null"), || {
 //!         // log to /dev/null for a bit
-//!         fluid_set!(LOG_FILE, &open("B.txt"));
+//!         fluid_set!(LOG_FILE, open("B.txt"));
 //!         // log to B.txt starting with this line
 //!         {
-//!             fluid_set!(LOG_FILE, &open("C.txt"));
+//!             fluid_set!(LOG_FILE, open("C.txt"));
 //!             // but in this block log to C.txt
 //!         }
 //!         // before going back to using B.txt here
@@ -209,6 +209,7 @@
 //! In this case you will probably need some synchronization to use the shared
 //! object in a safe manner, just like you would do when using `Arc` and friends.
 
+use std::borrow::Borrow;
 use std::cell::UnsafeCell;
 use std::mem;
 use std::thread::LocalKey;
@@ -221,7 +222,7 @@ use std::thread::LocalKey;
 ///
 /// ```
 /// # use fluid_let::fluid_let;
-/// fluid_let!(static ENABLED: bool = &true);
+/// fluid_let!(static ENABLED: bool = true);
 /// ```
 ///
 /// Default value is optional:
@@ -237,7 +238,7 @@ use std::thread::LocalKey;
 /// # use fluid_let::fluid_let;
 /// fluid_let! {
 ///     /// Length of `Debug` representation of hashes in characters.
-///     pub static HASH_LENGTH: usize = &32;
+///     pub static HASH_LENGTH: usize = 32;
 ///
 ///     /// If set to true then passwords will be printed to logs.
 ///     #[cfg(test)]
@@ -268,8 +269,9 @@ macro_rules! fluid_let {
     } => {
         $(#[$attr])*
         $v static $name: $crate::DynamicVariable<$type_> = {
+            static DEFAULT: $type_ = $value;
             thread_local! {
-                static VARIABLE: $crate::DynamicCell<$type_> = $crate::DynamicCell::with_static($value);
+                static VARIABLE: $crate::DynamicCell<$type_> = $crate::DynamicCell::with_static(&DEFAULT);
             }
             $crate::DynamicVariable { cell: &VARIABLE }
         };
@@ -333,9 +335,10 @@ macro_rules! fluid_let {
 #[macro_export]
 macro_rules! fluid_set {
     ($variable:expr, $value:expr) => {
+        let _value_ = $value;
         // This is safe because the users do not get direct access to the guard
         // and are not able to drop it prematurely, thus maintaining invariants.
-        let _guard_ = unsafe { $variable.set_guard($value) };
+        let _guard_ = unsafe { $variable.set_guard(&_value_) };
     };
 }
 
@@ -374,11 +377,11 @@ impl<T> DynamicVariable<T> {
     }
 
     /// Bind a new value to the dynamic variable.
-    pub fn set<R>(&self, value: &T, f: impl FnOnce() -> R) -> R {
+    pub fn set<R>(&self, value: impl Borrow<T>, f: impl FnOnce() -> R) -> R {
         self.cell.with(|current| {
             // This is safe because the guard returned by set() is guaranteed to be
             // dropped after the thunk returns and before anything else executes.
-            let _guard_ = unsafe { current.set(value) };
+            let _guard_ = unsafe { current.set(value.borrow()) };
             f()
         })
     }
@@ -395,7 +398,11 @@ impl<T> DynamicVariable<T> {
     pub unsafe fn set_guard(&self, value: &T) -> DynamicCellGuard<T> {
         // We use transmute to extend the lifetime or "current" to that of "value".
         // This is really the case when assignments are properly scoped.
-        self.cell.with(|current| mem::transmute(current.set(value)))
+        unsafe fn extend_lifetime<'a, 'b, T>(r: &'a T) -> &'b T {
+            mem::transmute(r)
+        }
+        self.cell
+            .with(|current| extend_lifetime(current).set(value))
     }
 }
 
@@ -515,14 +522,14 @@ mod tests {
 
     #[test]
     fn static_initializer() {
-        fluid_let!(static NUMBER: i32 = &42);
+        fluid_let!(static NUMBER: i32 = 42);
 
         assert_eq!(NUMBER.copied(), Some(42));
 
         fluid_let! {
-            static NUMBER_1: i32 = &100;
+            static NUMBER_1: i32 = 100;
             static NUMBER_2: i32;
-            static NUMBER_3: i32 = &200;
+            static NUMBER_3: i32 = 200;
         }
 
         assert_eq!(NUMBER_1.copied(), Some(100));
@@ -536,11 +543,11 @@ mod tests {
 
         YEAR.get(|current| assert_eq!(current, None));
 
-        fluid_set!(YEAR, &2019);
+        fluid_set!(YEAR, 2019);
 
         YEAR.get(|current| assert_eq!(current, Some(&2019)));
         {
-            fluid_set!(YEAR, &2525);
+            fluid_set!(YEAR, 2525);
 
             YEAR.get(|current| assert_eq!(current, Some(&2525)));
         }
@@ -548,14 +555,33 @@ mod tests {
     }
 
     #[test]
+    fn references() {
+        fluid_let!(static YEAR: i32);
+
+        // Temporary value
+        fluid_set!(YEAR, 10);
+        assert_eq!(YEAR.copied(), Some(10));
+
+        // Local reference
+        let current_year = 20;
+        fluid_set!(YEAR, &current_year);
+        assert_eq!(YEAR.copied(), Some(20));
+
+        // Heap reference
+        let current_year = Box::new(30);
+        fluid_set!(YEAR, current_year);
+        assert_eq!(YEAR.copied(), Some(30));
+    }
+
+    #[test]
     fn thread_locality() {
         fluid_let!(static THREAD_ID: i8);
 
-        THREAD_ID.set(&0, || {
+        THREAD_ID.set(0, || {
             THREAD_ID.get(|current| assert_eq!(current, Some(&0)));
             let t = thread::spawn(move || {
                 THREAD_ID.get(|current| assert_eq!(current, None));
-                THREAD_ID.set(&1, || {
+                THREAD_ID.set(1, || {
                     THREAD_ID.get(|current| assert_eq!(current, Some(&1)));
                 });
             });
@@ -570,8 +596,8 @@ mod tests {
         assert_eq!(ENABLED.cloned(), None);
         assert_eq!(ENABLED.copied(), None);
 
-        ENABLED.set(&true, || assert_eq!(ENABLED.cloned(), Some(true)));
-        ENABLED.set(&true, || assert_eq!(ENABLED.copied(), Some(true)));
+        ENABLED.set(true, || assert_eq!(ENABLED.cloned(), Some(true)));
+        ENABLED.set(true, || assert_eq!(ENABLED.copied(), Some(true)));
     }
 
     struct Hash {
@@ -603,7 +629,7 @@ mod tests {
     fn readme_example_code() {
         let hash = Hash { value: [0; 16] };
         assert_eq!(format!("{:?}", hash), "Hash(00000000...)");
-        fluid_set!(DEBUG_FULL_HASH, &true);
+        fluid_set!(DEBUG_FULL_HASH, true);
         assert_eq!(
             format!("{:?}", hash),
             "Hash(00000000000000000000000000000000)"
