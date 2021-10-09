@@ -16,7 +16,7 @@ Add this to your Cargo.toml:
 
 ```toml
 [dependencies]
-fluid-let = "0.1.0"
+fluid-let = "1.0"
 ```
 
 You can declare global dynamic variables using `fluid_let!` macro.
