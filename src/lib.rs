@@ -55,7 +55,7 @@
 //! #
 //! let log_file: File = open("/tmp/log.txt");
 //!
-//! LOG_FILE.set(log_file, || {
+//! LOG_FILE.set(&log_file, || {
 //!     //
 //!     // logs will be redirected to /tmp/log.txt in this block
 //!     //
