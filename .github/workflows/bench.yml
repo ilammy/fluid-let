@@ -48,3 +48,10 @@ jobs:
       with:
         name: Benchmark report
         path: benches/target/criterion
+
+    # Since benchmarks are in a separate crate, these checks are not performed
+    # by the main workflow. Do them here to ensure quality of benchmarks.
+    - name: Check code formatting
+      run: cd benches && cargo fmt -- --check
+    - name: Run static analysis on tests
+      run: cd benches && cargo clippy --all-targets
