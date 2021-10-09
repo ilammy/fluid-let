@@ -468,7 +468,7 @@ impl<'a, T> Drop for DynamicCellGuard<'a, T> {
         // get() and set() methods of DynamicCell are used correctly. That is, there must be
         // no users of the new value which is about to be destroyed.
         unsafe {
-            mem::replace(&mut *self.cell.cell.get(), self.old_value.take());
+            *self.cell.cell.get() = self.old_value.take();
         }
     }
 }
