@@ -311,7 +311,7 @@ macro_rules! fluid_let {
 /// fluid_let!(static ENABLED: bool);
 ///
 /// fn some_function() {
-///     fluid_set!(ENABLED, &true);
+///     fluid_set!(ENABLED, true);
 ///
 ///     // function body
 /// }
@@ -325,7 +325,7 @@ macro_rules! fluid_let {
 /// # fluid_let!(static ENABLED: bool);
 /// #
 /// fn some_function() {
-///     ENABLED.set(&true, || {
+///     ENABLED.set(true, || {
 ///         // function body
 ///     });
 /// }
