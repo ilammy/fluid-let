@@ -1,0 +1,13 @@
+[package]
+name = "fluid-let-benches"
+version = "0.0.0"
+edition = "2018"
+publish = false
+
+[dev-dependencies]
+criterion = "0.3.0"
+fluid-let = { path = ".." }
+
+[[bench]]
+name = "fluid-let"
+harness = false

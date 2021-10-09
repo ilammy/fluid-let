@@ -9,10 +9,3 @@ readme = "README.md"
 keywords = ["dynamic", "fluid", "scope", "variables"]
 categories = ["config"]
 license = "MIT"
-
-[dev-dependencies]
-criterion = "0.3.0"
-
-[[bench]]
-name = "fluid-let"
-harness = false
