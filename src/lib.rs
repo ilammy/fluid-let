@@ -348,8 +348,7 @@ macro_rules! fluid_set {
 ///
 /// See [crate-level documentation](index.html) for examples.
 pub struct DynamicVariable<T: 'static> {
-    #[doc(hidden)]
-    pub cell: &'static LocalKey<DynamicCell<T>>,
+    cell: &'static LocalKey<DynamicCell<T>>,
 }
 
 /// A resettable reference.
