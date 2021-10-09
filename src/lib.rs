@@ -351,10 +351,25 @@ pub struct DynamicVariable<T: 'static> {
     cell: &'static LocalKey<DynamicCell<T>>,
 }
 
+/// A global dynamic variable with initial value.
+///
+/// Declared and initialized by the [`fluid_let!`](macro.fluid_let.html) macro.
+///
+/// See [crate-level documentation](index.html) for examples.
+pub struct InitializedDynamicVariable<T: 'static> {
+    cell: &'static LocalKey<InitializedDynamicCell<T>>,
+}
+
 /// A resettable reference.
 #[doc(hidden)]
 pub struct DynamicCell<T> {
     cell: UnsafeCell<Option<*const T>>,
+}
+
+/// A resettable reference.
+#[doc(hidden)]
+pub struct InitializedDynamicCell<T> {
+    cell: UnsafeCell<*const T>,
 }
 
 /// Guard setting a new value of `DynamicCell<T>`.
@@ -380,6 +395,55 @@ impl<T> DynamicVariable<T> {
             // is limited to this block so it cannot outlive any value set by set()
             // in the caller frames.
             f(unsafe { current.get() })
+        })
+    }
+
+    /// Bind a new value to the dynamic variable.
+    pub fn set<R>(&self, value: impl Borrow<T>, f: impl FnOnce() -> R) -> R {
+        self.cell.with(|current| {
+            // This is safe because the guard returned by set() is guaranteed to be
+            // dropped after the thunk returns and before anything else executes.
+            let _guard_ = unsafe { current.set(value.borrow()) };
+            f()
+        })
+    }
+
+    /// Bind a new value to the dynamic variable.
+    ///
+    /// # Safety
+    ///
+    /// The value is bound for the lifetime of the returned guard. The guard must be
+    /// dropped before the end of lifetime of the new and old assignment values.
+    /// If the variable is assigned another value while this guard is alive, it must
+    /// not be dropped until that new assignment is undone.
+    #[doc(hidden)]
+    pub unsafe fn set_guard(&self, value: &T) -> DynamicCellGuard<T> {
+        // We use transmute to extend the lifetime or "current" to that of "value".
+        // This is really the case when assignments are properly scoped.
+        unsafe fn extend_lifetime<'a, 'b, T>(r: &'a T) -> &'b T {
+            mem::transmute(r)
+        }
+        self.cell
+            .with(|current| extend_lifetime(current).set(value))
+    }
+}
+
+impl<T> InitializedDynamicVariable<T> {
+    /// Initialize a dynamic variable.
+    ///
+    /// Use [`fluid_let!`](macro.fluid_let.html) macro to do this.
+    #[doc(hidden)]
+    pub const fn new(cell: &'static LocalKey<DynamicCell<T>>) -> Self {
+        Self { cell }
+    }
+
+    /// Access current value of the dynamic variable.
+    pub fn get<R>(&self, f: impl FnOnce(&T) -> R) -> R {
+        self.cell.with(|current| {
+            // This is safe because the lifetime of the reference returned by get()
+            // is limited to this block so it cannot outlive any value set by set()
+            // in the caller frames.
+            f(unsafe { current.get_unchecked() })
         })
     }
 
@@ -450,6 +514,18 @@ impl<T> DynamicCell<T> {
     /// returned by a `set()` call. Ensure that this reference does not outlive it.
     unsafe fn get(&self) -> Option<&T> {
         (&*self.cell.get()).map(|p| &*p)
+    }
+
+    /// Access the current value of the cell.
+    ///
+    /// # Safety
+    ///
+    /// The cell must not be empty, or else you get a null pointer dereference.
+    ///
+    /// The returned reference is safe to use during the lifetime of a corresponding guard
+    /// returned by a `set()` call. Ensure that this reference does not outlive it.
+    unsafe fn get_unchecked(&self) -> &T {
+        self.cell.get()
     }
 
     /// Temporarily set a new value of the cell.
