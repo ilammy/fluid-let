@@ -252,12 +252,12 @@ macro_rules! fluid_let {
     // Simple case: a single definition with None value.
     {
         $(#[$attr:meta])*
-        $v:vis static $name:ident: $type_:ty
+        $pub:vis static $name:ident: $type:ty
     } => {
         $(#[$attr])*
-        $v static $name: $crate::DynamicVariable<$type_> = {
+        $pub static $name: $crate::DynamicVariable<$type> = {
             thread_local! {
-                static VARIABLE: $crate::DynamicCell<$type_> = $crate::DynamicCell::empty();
+                static VARIABLE: $crate::DynamicCell<$type> = $crate::DynamicCell::empty();
             }
             $crate::DynamicVariable::new(&VARIABLE)
         };
@@ -265,13 +265,13 @@ macro_rules! fluid_let {
     // Simple case: a single definition with Some value.
     {
         $(#[$attr:meta])*
-        $v:vis static $name:ident: $type_:ty = $value:expr
+        $pub:vis static $name:ident: $type:ty = $value:expr
     } => {
         $(#[$attr])*
-        $v static $name: $crate::DynamicVariable<$type_> = {
-            static DEFAULT: $type_ = $value;
+        $pub static $name: $crate::DynamicVariable<$type> = {
+            static DEFAULT: $type = $value;
             thread_local! {
-                static VARIABLE: $crate::DynamicCell<$type_> = $crate::DynamicCell::with_static(&DEFAULT);
+                static VARIABLE: $crate::DynamicCell<$type> = $crate::DynamicCell::with_static(&DEFAULT);
             }
             $crate::DynamicVariable::new(&VARIABLE)
         };
@@ -279,19 +279,19 @@ macro_rules! fluid_let {
     // Multiple definitions (iteration), with None value.
     {
         $(#[$attr:meta])*
-        $v:vis static $name:ident: $type_:ty;
+        $pub:vis static $name:ident: $type:ty;
         $($rest:tt)*
     } => {
-        $crate::fluid_let!($(#[$attr])* $v static $name: $type_);
+        $crate::fluid_let!($(#[$attr])* $pub static $name: $type);
         $crate::fluid_let!($($rest)*);
     };
     // Multiple definitions (iteration), with Some value.
     {
         $(#[$attr:meta])*
-        $v:vis static $name:ident: $type_:ty = $value:expr;
+        $pub:vis static $name:ident: $type:ty = $value:expr;
         $($rest:tt)*
     } => {
-        $crate::fluid_let!($(#[$attr])* $v static $name: $type_ = $value);
+        $crate::fluid_let!($(#[$attr])* $pub static $name: $type = $value);
         $crate::fluid_let!($($rest)*);
     };
     // No definitions (recursion base).
