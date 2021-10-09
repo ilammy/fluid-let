@@ -29,9 +29,9 @@ jobs:
       with:
         ref: ${{ github.base_ref }}
     - name: Compile benchmarks
-      run: cargo bench --no-run
+      run: cd benches && cargo bench --no-run
     - name: Run benchmarks for old code
-      run: cargo bench
+      run: cd benches && cargo bench
 
     - name: Check out new code
       uses: actions/checkout@v1
@@ -39,12 +39,19 @@ jobs:
         clean: false
         ref: ${{ github.head_ref }}
     - name: Compile benchmarks
-      run: cargo bench --no-run
+      run: cd benches && cargo bench --no-run
     - name: Run benchmarks for new code
-      run: cargo bench
+      run: cd benches && cargo bench
 
     - name: Upload benchmark comparison
       uses: actions/upload-artifact@v1
       with:
         name: Benchmark report
-        path: target/criterion
+        path: benches/target/criterion
+
+    # Since benchmarks are in a separate crate, these checks are not performed
+    # by the main workflow. Do them here to ensure quality of benchmarks.
+    - name: Check code formatting
+      run: cd benches && cargo fmt -- --check
+    - name: Run static analysis on tests
+      run: cd benches && cargo clippy --all-targets
