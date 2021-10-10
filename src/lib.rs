@@ -617,7 +617,7 @@ mod tests {
     fn static_initializer() {
         fluid_let!(static NUMBER: i32 = 42);
 
-        assert_eq!(NUMBER.copied(), Some(42));
+        assert_eq!(NUMBER.copied(), 42);
 
         fluid_let! {
             static NUMBER_1: i32 = 100;
@@ -625,9 +625,9 @@ mod tests {
             static NUMBER_3: i32 = 200;
         }
 
-        assert_eq!(NUMBER_1.copied(), Some(100));
+        assert_eq!(NUMBER_1.copied(), 100);
         assert_eq!(NUMBER_2.copied(), None);
-        assert_eq!(NUMBER_3.copied(), Some(200));
+        assert_eq!(NUMBER_3.copied(), 200);
     }
 
     #[test]
