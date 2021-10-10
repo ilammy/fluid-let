@@ -452,6 +452,20 @@ impl<T> DynamicCell<T> {
         (&*self.cell.get()).map(|p| &*p)
     }
 
+    /// Access the current value of the cell.
+    ///
+    /// # Safety
+    ///
+    /// The cell **must** have a value, or else the behavior is undefined.
+    ///
+    /// The returned reference is safe to use during the lifetime of a corresponding guard
+    /// returned by a `set()` call. Ensure that this reference does not outlive it.
+    unsafe fn get_unchecked(&self) -> &T {
+        // There is Option::unwrap_unchecked(), but it's nightly-only as of 1.55.
+        // For now, unwrap and panic on errors.
+        self.get().expect("get_unchecked() used with empty value")
+    }
+
     /// Temporarily set a new value of the cell.
     ///
     /// The value will be active while the returned guard object is live. It will be reset
