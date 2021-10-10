@@ -268,12 +268,12 @@ macro_rules! fluid_let {
         $pub:vis static $name:ident: $type:ty = $value:expr
     } => {
         $(#[$attr])*
-        $pub static $name: $crate::DynamicVariable<$type> = {
+        $pub static $name: $crate::InitializedDynamicVariable<$type> = {
             static DEFAULT: $type = $value;
             thread_local! {
                 static VARIABLE: $crate::DynamicCell<$type> = $crate::DynamicCell::with_static(&DEFAULT);
             }
-            $crate::DynamicVariable::new(&VARIABLE)
+            $crate::InitializedDynamicVariable::new(&VARIABLE)
         };
     };
     // Multiple definitions (iteration), with None value.
