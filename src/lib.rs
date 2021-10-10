@@ -692,6 +692,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::bool_assert_comparison)]
     fn convenience_accessors_initialized() {
         fluid_let!(static ENABLED: bool = false);
 
