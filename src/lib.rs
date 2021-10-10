@@ -36,7 +36,9 @@
 //! fluid_let!(static LOG_LEVEL: LogLevel = LogLevel::Info);
 //! ```
 //!
-//! Here `LOG_LEVEL` has `Some(&LogLevel::Info)` as its default value.
+//! In this case `LOG_LEVEL` has `&LogLevel::Info` as its default value.
+//! Note that there is no `Option`: initialized dynamic variables always
+//! have a value.
 //!
 //! # Setting dynamic variables
 //!
