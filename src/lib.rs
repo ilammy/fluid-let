@@ -691,6 +691,17 @@ mod tests {
         ENABLED.set(true, || assert_eq!(ENABLED.copied(), Some(true)));
     }
 
+    #[test]
+    fn convenience_accessors_initialized() {
+        fluid_let!(static ENABLED: bool = false);
+
+        assert_eq!(ENABLED.cloned(), false);
+        assert_eq!(ENABLED.copied(), false);
+
+        ENABLED.set(true, || assert_eq!(ENABLED.cloned(), true));
+        ENABLED.set(true, || assert_eq!(ENABLED.copied(), true));
+    }
+
     struct Hash {
         value: [u8; 16],
     }
