@@ -259,7 +259,7 @@ macro_rules! fluid_let {
             thread_local! {
                 static VARIABLE: $crate::DynamicCell<$type_> = $crate::DynamicCell::empty();
             }
-            $crate::DynamicVariable { cell: &VARIABLE }
+            $crate::DynamicVariable::new(&VARIABLE)
         };
     };
     // Simple case: a single definition with Some value.
@@ -273,7 +273,7 @@ macro_rules! fluid_let {
             thread_local! {
                 static VARIABLE: $crate::DynamicCell<$type_> = $crate::DynamicCell::with_static(&DEFAULT);
             }
-            $crate::DynamicVariable { cell: &VARIABLE }
+            $crate::DynamicVariable::new(&VARIABLE)
         };
     };
     // Multiple definitions (iteration), with None value.
@@ -348,8 +348,7 @@ macro_rules! fluid_set {
 ///
 /// See [crate-level documentation](index.html) for examples.
 pub struct DynamicVariable<T: 'static> {
-    #[doc(hidden)]
-    pub cell: &'static LocalKey<DynamicCell<T>>,
+    cell: &'static LocalKey<DynamicCell<T>>,
 }
 
 /// A resettable reference.
@@ -366,6 +365,14 @@ pub struct DynamicCellGuard<'a, T> {
 }
 
 impl<T> DynamicVariable<T> {
+    /// Initialize a dynamic variable.
+    ///
+    /// Use [`fluid_let!`](macro.fluid_let.html) macro to do this.
+    #[doc(hidden)]
+    pub const fn new(cell: &'static LocalKey<DynamicCell<T>>) -> Self {
+        Self { cell }
+    }
+
     /// Access current value of the dynamic variable.
     pub fn get<R>(&self, f: impl FnOnce(Option<&T>) -> R) -> R {
         self.cell.with(|current| {
