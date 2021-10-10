@@ -621,11 +621,11 @@ mod tests {
 
         fluid_let! {
             static NUMBER_1: i32 = 100;
-            static NUMBER_3: i32 = 200;
+            static NUMBER_2: i32 = 200;
         }
 
         assert_eq!(NUMBER_1.copied(), 100);
-        assert_eq!(NUMBER_3.copied(), 200);
+        assert_eq!(NUMBER_2.copied(), 200);
     }
 
     #[test]
