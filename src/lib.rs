@@ -175,16 +175,13 @@
 //!     Error,
 //! }
 //!
-//! fluid_let!(static MIN_LOG_LEVEL: LogLevel);
-//!
-//! const DEFAULT_MIN_LOG_LEVEL: LogLevel = LogLevel::Info;
-//!
-//! fn min_log_level() -> LogLevel {
-//!     MIN_LOG_LEVEL.copied().unwrap_or(DEFAULT_MIN_LOG_LEVEL)
-//! }
+//! # #[cfg(not(feature = "fluid-let"))]
+//! # fluid_let!(static LOG_LEVEL: LogLevel);
+//! # #[cfg(feature = "fluid-let")]
+//! fluid_let!(static LOG_LEVEL: LogLevel = LogLevel::Info);
 //!
 //! fn write_log(level: LogLevel, msg: &str) -> io::Result<()> {
-//!     if level < min_log_level() {
+//!     if level < LOG_LEVEL.copied().unwrap() {
 //!         return Ok(());
 //!     }
 //!     LOG_FILE.get(|current| {
