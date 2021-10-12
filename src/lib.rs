@@ -436,6 +436,7 @@ impl<T> DynamicCell<T> {
     }
 
     /// Makes a new cell with value.
+    #[cfg(feature = "static-init")]
     pub fn with_static(value: &'static T) -> Self {
         DynamicCell {
             cell: UnsafeCell::new(Some(value)),
@@ -528,6 +529,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "static-init")]
     fn static_initializer() {
         fluid_let!(static NUMBER: i32 = 42);
 

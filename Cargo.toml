@@ -9,3 +9,6 @@ readme = "README.md"
 keywords = ["dynamic", "fluid", "scope", "variables"]
 categories = ["config"]
 license = "MIT"
+
+[features]
+static-init = []
