@@ -7,7 +7,14 @@ New features:
 
 - Convenience getters `copied()` and `cloned()` for copyable types.
 - Convenience setter `fluid_set!` for scoped assignment.
-- `fluid_let!` now allows `'static` initializers.
+
+Unstable features:
+
+- `"static-init"` Cargo feature
+  - `fluid_let!` allows `'static` initializers:
+    ```rust
+    fluid_let!(static VARIABLE: Type = initial_value);
+    ```
 
 Version 0.1.0 — 2019-03-12
 ==========================
