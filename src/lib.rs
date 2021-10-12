@@ -25,8 +25,8 @@
 //! possibly absent reference to a file. All dynamic variables have `None` as
 //! their default value, unless a particular value is set for them.
 //!
-//! It is also possible to provide `'static` initialization, if variable type
-//! allows it:
+//! If you enable the [`"static-init"` feature](#features), it is also
+//! possible to provide `'static` initialization for types that allow it:
 //!
 //! ```no_run
 //! # use fluid_let::fluid_let;
@@ -240,14 +240,15 @@ use std::thread::LocalKey;
 ///
 /// ```
 /// # use fluid_let::fluid_let;
-/// fluid_let!(static ENABLED: bool = true);
+/// fluid_let!(static ENABLED: bool);
 /// ```
 ///
-/// Default value is optional:
+/// If [`"static-init"` feature](index.html#features) is enabled,
+/// you can provide initial value:
 ///
 /// ```
 /// # use fluid_let::fluid_let;
-/// fluid_let!(static ENABLED: bool);
+/// fluid_let!(static ENABLED: bool = true);
 /// ```
 ///
 /// Multiple declarations with attributes and visibility modifiers are also supported:
