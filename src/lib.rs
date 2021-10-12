@@ -208,6 +208,23 @@
 //! internal mutability to a dynamic variable and access it from multiple threads.
 //! In this case you will probably need some synchronization to use the shared
 //! object in a safe manner, just like you would do when using `Arc` and friends.
+//!
+//! # Features
+//!
+//! Currently, there is only one optional feature: `"static-init"`,
+//! gating static initialization of dynamic variables:
+//!
+//! ```
+//! # use fluid_let::fluid_let;
+//! #
+//! # enum LogLevel { Info }
+//! #
+//! fluid_let!(static LOG_LEVEL: LogLevel = LogLevel::Info);
+//! //                                    ~~~~~~~~~~~~~~~~
+//! ```
+//!
+//! The API for accessing known-initialized variables has not stabilized yet
+//! and may be subject to changes.
 
 use std::borrow::Borrow;
 use std::cell::UnsafeCell;
