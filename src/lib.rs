@@ -33,6 +33,7 @@
 //! #
 //! # enum LogLevel { Info }
 //! #
+//! # #[cfg(feature = "static-init")]
 //! fluid_let!(static LOG_LEVEL: LogLevel = LogLevel::Info);
 //! ```
 //!
@@ -219,6 +220,7 @@
 //! #
 //! # enum LogLevel { Info }
 //! #
+//! # #[cfg(feature = "static-init")]
 //! fluid_let!(static LOG_LEVEL: LogLevel = LogLevel::Info);
 //! //                                    ~~~~~~~~~~~~~~~~
 //! ```
