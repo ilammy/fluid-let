@@ -25,14 +25,15 @@
 //! possibly absent reference to a file. All dynamic variables have `None` as
 //! their default value, unless a particular value is set for them.
 //!
-//! It is also possible to provide `'static` initialization, if variable type
-//! allows it:
+//! If you enable the [`"static-init"` feature](#features), it is also
+//! possible to provide `'static` initialization for types that allow it:
 //!
 //! ```no_run
 //! # use fluid_let::fluid_let;
 //! #
 //! # enum LogLevel { Info }
 //! #
+//! # #[cfg(feature = "static-init")]
 //! fluid_let!(static LOG_LEVEL: LogLevel = LogLevel::Info);
 //! ```
 //!
@@ -174,16 +175,13 @@
 //!     Error,
 //! }
 //!
-//! fluid_let!(static MIN_LOG_LEVEL: LogLevel);
-//!
-//! const DEFAULT_MIN_LOG_LEVEL: LogLevel = LogLevel::Info;
-//!
-//! fn min_log_level() -> LogLevel {
-//!     MIN_LOG_LEVEL.copied().unwrap_or(DEFAULT_MIN_LOG_LEVEL)
-//! }
+//! # #[cfg(not(feature = "fluid-let"))]
+//! # fluid_let!(static LOG_LEVEL: LogLevel);
+//! # #[cfg(feature = "fluid-let")]
+//! fluid_let!(static LOG_LEVEL: LogLevel = LogLevel::Info);
 //!
 //! fn write_log(level: LogLevel, msg: &str) -> io::Result<()> {
-//!     if level < min_log_level() {
+//!     if level < LOG_LEVEL.copied().unwrap() {
 //!         return Ok(());
 //!     }
 //!     LOG_FILE.get(|current| {
@@ -208,12 +206,31 @@
 //! internal mutability to a dynamic variable and access it from multiple threads.
 //! In this case you will probably need some synchronization to use the shared
 //! object in a safe manner, just like you would do when using `Arc` and friends.
+//!
+//! # Features
+//!
+//! Currently, there is only one optional feature: `"static-init"`,
+//! gating static initialization of dynamic variables:
+//!
+//! ```
+//! # use fluid_let::fluid_let;
+//! #
+//! # enum LogLevel { Info }
+//! #
+//! # #[cfg(feature = "static-init")]
+//! fluid_let!(static LOG_LEVEL: LogLevel = LogLevel::Info);
+//! //                                    ~~~~~~~~~~~~~~~~
+//! ```
+//!
+//! The API for accessing known-initialized variables has not stabilized yet
+//! and may be subject to changes.
 
 use std::borrow::Borrow;
 use std::cell::UnsafeCell;
 use std::mem;
 use std::thread::LocalKey;
 
+#[cfg(feature = "static-init")]
 /// Declares global dynamic variables.
 ///
 /// # Examples
@@ -222,14 +239,15 @@ use std::thread::LocalKey;
 ///
 /// ```
 /// # use fluid_let::fluid_let;
-/// fluid_let!(static ENABLED: bool = true);
+/// fluid_let!(static ENABLED: bool);
 /// ```
 ///
-/// Default value is optional:
+/// If [`"static-init"` feature](index.html#features) is enabled,
+/// you can provide initial value:
 ///
 /// ```
 /// # use fluid_let::fluid_let;
-/// fluid_let!(static ENABLED: bool);
+/// fluid_let!(static ENABLED: bool = true);
 /// ```
 ///
 /// Multiple declarations with attributes and visibility modifiers are also supported:
@@ -275,6 +293,82 @@ macro_rules! fluid_let {
             }
             $crate::DynamicVariable::new(&VARIABLE)
         };
+    };
+    // Multiple definitions (iteration), with None value.
+    {
+        $(#[$attr:meta])*
+        $pub:vis static $name:ident: $type:ty;
+        $($rest:tt)*
+    } => {
+        $crate::fluid_let!($(#[$attr])* $pub static $name: $type);
+        $crate::fluid_let!($($rest)*);
+    };
+    // Multiple definitions (iteration), with Some value.
+    {
+        $(#[$attr:meta])*
+        $pub:vis static $name:ident: $type:ty = $value:expr;
+        $($rest:tt)*
+    } => {
+        $crate::fluid_let!($(#[$attr])* $pub static $name: $type = $value);
+        $crate::fluid_let!($($rest)*);
+    };
+    // No definitions (recursion base).
+    {} => {};
+}
+
+// FIXME(ilammy, 2021-10-12): Make "static-init" available by default
+//
+// Macros can't abstract out #[cfg(...)] checks in expanded code
+// thus we have to duplicate this macro to insert a compiler error.
+
+#[cfg(not(feature = "static-init"))]
+/// Declares global dynamic variables.
+///
+/// # Examples
+///
+/// One-line form for single declarations:
+///
+/// ```
+/// # use fluid_let::fluid_let;
+/// fluid_let!(static ENABLED: bool);
+/// ```
+///
+/// Multiple declarations with attributes and visibility modifiers are also supported:
+///
+/// ```
+/// # use fluid_let::fluid_let;
+/// fluid_let! {
+///     /// Length of `Debug` representation of hashes in characters.
+///     pub static HASH_LENGTH: usize;
+///
+///     /// If set to true then passwords will be printed to logs.
+///     #[cfg(test)]
+///     static DUMP_PASSWORDS: bool;
+/// }
+/// ```
+///
+/// See also [crate-level documentation](index.html) for usage examples.
+#[macro_export]
+macro_rules! fluid_let {
+    // Simple case: a single definition with None value.
+    {
+        $(#[$attr:meta])*
+        $pub:vis static $name:ident: $type:ty
+    } => {
+        $(#[$attr])*
+        $pub static $name: $crate::DynamicVariable<$type> = {
+            thread_local! {
+                static VARIABLE: $crate::DynamicCell<$type> = $crate::DynamicCell::empty();
+            }
+            $crate::DynamicVariable::new(&VARIABLE)
+        };
+    };
+    // Simple case: a single definition with Some value.
+    {
+        $(#[$attr:meta])*
+        $pub:vis static $name:ident: $type:ty = $value:expr
+    } => {
+        compile_error!("Static initialization is unstable, use \"static-init\" feature to opt-in");
     };
     // Multiple definitions (iteration), with None value.
     {
@@ -436,6 +530,7 @@ impl<T> DynamicCell<T> {
     }
 
     /// Makes a new cell with value.
+    #[cfg(feature = "static-init")]
     pub fn with_static(value: &'static T) -> Self {
         DynamicCell {
             cell: UnsafeCell::new(Some(value)),
@@ -528,6 +623,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "static-init")]
     fn static_initializer() {
         fluid_let!(static NUMBER: i32 = 42);
 

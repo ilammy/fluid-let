@@ -9,3 +9,9 @@ readme = "README.md"
 keywords = ["dynamic", "fluid", "scope", "variables"]
 categories = ["config"]
 license = "MIT"
+
+[features]
+static-init = []
+
+[package.metadata.docs.rs]
+features = [ "static-init" ]
