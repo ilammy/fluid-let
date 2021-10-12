@@ -3,6 +3,9 @@
 
 The version currently under development.
 
+Version 1.0.0 — 2021-10-12
+==========================
+
 New features:
 
 - Convenience getters `copied()` and `cloned()` for copyable types.
