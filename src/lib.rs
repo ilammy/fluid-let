@@ -214,6 +214,7 @@ use std::cell::UnsafeCell;
 use std::mem;
 use std::thread::LocalKey;
 
+#[cfg(feature = "static-init")]
 /// Declares global dynamic variables.
 ///
 /// # Examples
@@ -275,6 +276,82 @@ macro_rules! fluid_let {
             }
             $crate::DynamicVariable::new(&VARIABLE)
         };
+    };
+    // Multiple definitions (iteration), with None value.
+    {
+        $(#[$attr:meta])*
+        $pub:vis static $name:ident: $type:ty;
+        $($rest:tt)*
+    } => {
+        $crate::fluid_let!($(#[$attr])* $pub static $name: $type);
+        $crate::fluid_let!($($rest)*);
+    };
+    // Multiple definitions (iteration), with Some value.
+    {
+        $(#[$attr:meta])*
+        $pub:vis static $name:ident: $type:ty = $value:expr;
+        $($rest:tt)*
+    } => {
+        $crate::fluid_let!($(#[$attr])* $pub static $name: $type = $value);
+        $crate::fluid_let!($($rest)*);
+    };
+    // No definitions (recursion base).
+    {} => {};
+}
+
+// FIXME(ilammy, 2021-10-12): Make "static-init" available by default
+//
+// Macros can't abstract out #[cfg(...)] checks in expanded code
+// thus we have to duplicate this macro to insert a compiler error.
+
+#[cfg(not(feature = "static-init"))]
+/// Declares global dynamic variables.
+///
+/// # Examples
+///
+/// One-line form for single declarations:
+///
+/// ```
+/// # use fluid_let::fluid_let;
+/// fluid_let!(static ENABLED: bool);
+/// ```
+///
+/// Multiple declarations with attributes and visibility modifiers are also supported:
+///
+/// ```
+/// # use fluid_let::fluid_let;
+/// fluid_let! {
+///     /// Length of `Debug` representation of hashes in characters.
+///     pub static HASH_LENGTH: usize;
+///
+///     /// If set to true then passwords will be printed to logs.
+///     #[cfg(test)]
+///     static DUMP_PASSWORDS: bool;
+/// }
+/// ```
+///
+/// See also [crate-level documentation](index.html) for usage examples.
+#[macro_export]
+macro_rules! fluid_let {
+    // Simple case: a single definition with None value.
+    {
+        $(#[$attr:meta])*
+        $pub:vis static $name:ident: $type:ty
+    } => {
+        $(#[$attr])*
+        $pub static $name: $crate::DynamicVariable<$type> = {
+            thread_local! {
+                static VARIABLE: $crate::DynamicCell<$type> = $crate::DynamicCell::empty();
+            }
+            $crate::DynamicVariable::new(&VARIABLE)
+        };
+    };
+    // Simple case: a single definition with Some value.
+    {
+        $(#[$attr:meta])*
+        $pub:vis static $name:ident: $type:ty = $value:expr
+    } => {
+        compile_error!("Static initialization is unstable, use \"static-init\" feature to opt-in");
     };
     // Multiple definitions (iteration), with None value.
     {
