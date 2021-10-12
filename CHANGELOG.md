@@ -3,8 +3,8 @@
 
 The version currently under development.
 
-Version 1.0.0 — 2021-10-12
-==========================
+fluid-let 1.0.0 — 2021-10-12
+============================
 
 New features:
 
@@ -19,8 +19,8 @@ Unstable features:
     fluid_let!(static VARIABLE: Type = initial_value);
     ```
 
-Version 0.1.0 — 2019-03-12
-==========================
+fluid-let 0.1.0 — 2019-03-12
+============================
 
 Initial release of fluid-let.
 
