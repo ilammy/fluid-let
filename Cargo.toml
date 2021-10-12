@@ -12,3 +12,6 @@ license = "MIT"
 
 [features]
 static-init = []
+
+[package.metadata.docs.rs]
+features = [ "static-init" ]
